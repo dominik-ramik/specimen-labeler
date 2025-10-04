@@ -12,6 +12,15 @@ function isCsvFile(file) {
   return name.endsWith('.csv') || name.endsWith('.tsv') || name.endsWith('.txt')
 }
 
+// 🆕 Save sheet name to localStorage for persistence across reloads
+export function saveSheetName(sheetName) {
+  try {
+    localStorage.setItem('specimensLabeler_sheetName', sheetName)
+  } catch (error) {
+    console.warn('Failed to save sheet name:', error)
+  }
+}
+
 // Helper function to parse CSV content
 async function parseCsvFile(file) {
   const text = await file.text()
@@ -49,6 +58,7 @@ export async function loadExcelMetadata(file) {
     // Check if this is the same file as previously used
     const savedExcelFileName = localStorage.getItem('specimensLabeler_excelFileName')
     const savedSheetName = localStorage.getItem('specimensLabeler_sheetName')
+    
     const isMatchingFile = savedExcelFileName && savedExcelFileName === file.name
 
     // Auto-select if this is the same file and the saved sheet exists
@@ -59,11 +69,13 @@ export async function loadExcelMetadata(file) {
       // Auto-select the only sheet for CSV files
       result.sheetSelected = true
       result.selectedSheet = sheets[0]
+      // 🆕 Save the auto-selected CSV sheet name
+      saveSheetName(sheets[0])
     }
 
     // Save the current filename for future reference
     localStorage.setItem('specimensLabeler_excelFileName', file.name)
-
+    
     return result
   } catch (error) {
     console.error('Error reading file metadata:', error)
@@ -224,11 +236,12 @@ export async function getExcelData(file, sheetName) {
           }
         })
         
-        // Attach metadata to the row object (non-enumerable so it doesn't interfere with normal iteration)
+        // Attach metadata to the row object (non-enumerable but configurable for Vue reactivity)
         Object.defineProperty(rowData, '__metadata', {
           value: rowMeta,
           enumerable: false,
-          writable: false
+          writable: false,
+          configurable: true // 🆕 Changed from false to true - fixes Vue proxy issue
         })
         
         return rowData
@@ -240,7 +253,7 @@ export async function getExcelData(file, sheetName) {
     
     return result
   } catch (error) {
-    console.error('Error reading  data:', error)
+    console.error('Error reading data:', error)
     throw new Error('Failed to read Excel data: ' + error.message)
   }
 }

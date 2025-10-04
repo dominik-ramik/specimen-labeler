@@ -5,7 +5,7 @@ import ConfigurationSection from './components/ConfigurationSection.vue'
 import HowToUse from './components/HowToUse.vue'
 import { useAppState } from './composables/useAppState'
 import { useStorage } from './composables/useStorage'
-import { loadExcelMetadata, loadColumnNames, getExcelData } from './utils/excelHandler'
+import { loadExcelMetadata, loadColumnNames, getExcelData, saveSheetName } from './utils/excelHandler' // 🆕 Added saveSheetName
 import { labelGenerator } from './services/labelGenerator'
 
 const {
@@ -17,7 +17,9 @@ const {
   setTemplateFile,
   setExcelFile,
   setSheetName,
-  setHeaders
+  setHeaders,
+  setCachedExcelData, // 🆕 Import new functions
+  getCachedExcelData
 } = useAppState()
 
 const {
@@ -26,11 +28,12 @@ const {
   loadConfiguration,
   saveTemplateToStorage,
   loadStoredTemplate,
+  getStoredTemplateArrayBuffer, // 🆕 Use ArrayBuffer directly
   useStoredTemplate,
   saveExcelToStorage,
   loadStoredExcel,
   useStoredExcel,
-  saveIndividualValue
+  initializeStorage
 } = useStorage()
 
 // UI State
@@ -124,10 +127,16 @@ const handleSheetSelection = async (sheet) => {
   try {
     showLoading('Loading column headers...')
     setSheetName(sheet)
-    saveIndividualValue('sheetName', sheet)
+    
+    // 🆕 Save sheet name to localStorage for persistence across reloads
+    saveSheetName(sheet)
 
     const headerList = await loadColumnNames(excelFile.value, sheet)
     setHeaders(headerList)
+
+    // Pre-load and cache the Excel data
+    const excelData = await getExcelData(excelFile.value, sheet)
+    setCachedExcelData(excelData)
 
     // Auto-detect duplicate column
     const duplicateColumn = headerList.find((h) =>
@@ -152,26 +161,40 @@ const generateLabels = async () => {
     showLoading('Preparing to generate labels...')
     showOutput.value = false
 
-    // Force a fresh read of the configuration right before generation
-    const currentConfig = JSON.parse(JSON.stringify(configuration.value))
-
     if (!isReady.value) {
       throw new Error('Please select both Excel file, Word template, and sheet')
     }
 
-    // Read Excel data
+    // Get fresh ArrayBuffer directly from storage
+    updateProgress('Loading template...')
+    const templateArrayBuffer = getStoredTemplateArrayBuffer()
+    
+    if (!templateArrayBuffer) {
+      throw new Error(
+        'Template file not available. Please re-upload your template using the drop zone above.'
+      )
+    }
+
+    // Use cached Excel data instead of reading file again
     updateProgress('Reading data...')
-    const data = await getExcelData(excelFile.value, sheetName.value)
+    let data = getCachedExcelData()
+    
+    // If no cached data, read from file (fallback)
+    if (!data) {
+      console.log('No cached data, reading from file...')
+      data = await getExcelData(excelFile.value, sheetName.value)
+      setCachedExcelData(data) // Cache for next time
+    }
 
     if (data.length === 0) {
       throw new Error('No data found in the Excel sheet')
     }
 
-    // Generate labels with the fresh configuration
+    // Generate labels with ArrayBuffer directly
     const result = await labelGenerator.generateLabels(
-      templateFile.value,
-      data,
-      currentConfig,
+      templateArrayBuffer,
+      data, // Use cached data
+      configuration.value,
       (message) => updateProgress(message)
     )
 
@@ -181,10 +204,7 @@ const generateLabels = async () => {
 
     hideLoading()
     displayOutput(
-      `✅ Success! Generated ${result.stats.totalLabels} labels across ${result.stats.pages} pages.<br>
-       📄 File downloaded: labels_${timestamp}.docx (${result.stats.fileSizeMB} MB)<br>
-       📊 Layout: ${result.stats.itemsPerPage} labels per page<br>
-       📊 Records: ${result.stats.originalRecords} → ${result.stats.filteredRecords} → ${result.stats.totalLabels}`,
+      `✅ Success! Generated ${result.stats.pages} pages (${result.stats.itemsPerPage} labels per page)`,
       'success'
     )
   } catch (error) {
@@ -194,11 +214,11 @@ const generateLabels = async () => {
     // Handle file access errors specially
     if (error.name === 'NotReadableError' || error.message?.includes('could not be read')) {
       displayOutput(
-        `❌ Cannot read the template file. This usually happens when:<br><br>
-        • The file is open in Word or another application<br>
+        `❌ Cannot read the file. This usually happens when:<br><br>
+        • The file is open in another application<br>
         • The file was edited and needs to be re-uploaded<br>
         • The cached file reference is stale<br><br>
-        💡 <strong>Solution:</strong> Please refresh this page and re-upload your template file using the drop zone above.`,
+        💡 <strong>Solution:</strong> Please refresh this page and re-upload your files using the drop zones above.`,
         'error'
       )
     } else {
@@ -274,6 +294,9 @@ if (watchReadyState) {
 
 // Initialize on mount
 onMounted(async () => {
+  // 🆕 Initialize storage (cleanup legacy data)
+  await initializeStorage()
+  
   loadConfiguration()
 
   // Load stored template if exists
@@ -325,13 +348,19 @@ const shouldShowCollateOption = computed(() => {
   <div class="app-container">
     <h1>🌿 Specimens Labeler</h1>
 
+    <!-- Output Messages - Moved to top for visibility -->
+    <div v-if="showOutput" class="output" :class="outputType">
+      <button class="output-close" @click="showOutput = false" aria-label="Close message">×</button>
+      <div v-html="outputMessage"></div>
+    </div>
+
     <form @submit.prevent="generateLabels">
       <!-- Three-column grid layout -->
       <div class="main-content-grid">
         
         <!-- Section 1: Files Block -->
         <div class="section-block files-block">
-          <h2>📁 Upload Files</h2>
+          <h2>Upload Files</h2>
           <div class="files-content">
             <FileDropZone
               icon="📄"
@@ -389,7 +418,7 @@ const shouldShowCollateOption = computed(() => {
 
             <!-- Data Selection Section - Only shown when files are ready -->
             <div v-if="isReady" class="data-selection-section">
-              <h3>📋 Data Selection</h3>
+              <h3>Data Selection</h3>
               
               <!-- Record Selection -->
               <div class="selection-field">
@@ -538,7 +567,7 @@ const shouldShowCollateOption = computed(() => {
 
         <!-- Section 3: Generate Block - Only show when isReady -->
         <div v-if="isReady" class="section-block generate-block">
-          <h2>🚀 Generate Labels</h2>
+          <h2>Generate Labels</h2>
           
           <!-- Validation warnings -->
           <div v-if="validationSummary" class="validation-warnings">
@@ -560,12 +589,6 @@ const shouldShowCollateOption = computed(() => {
 
       </div>
     </form>
-
-    <!-- Output Messages -->
-    <div v-if="showOutput" class="output" :class="outputType">
-      <button class="output-close" @click="showOutput = false" aria-label="Close message">×</button>
-      <div v-html="outputMessage"></div>
-    </div>
 
     <!-- Loading Overlay -->
     <div v-if="loading" class="loading-overlay">
@@ -752,11 +775,23 @@ h1 {
 
 .output {
   position: relative;
-  margin: 20px auto;
+  margin: 0 auto 20px;
   padding: 15px 40px 15px 15px;
   border-radius: 4px;
   border-left: 4px solid #ccc;
   max-width: 1800px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .output-close {

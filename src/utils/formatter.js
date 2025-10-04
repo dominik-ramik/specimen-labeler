@@ -1,3 +1,13 @@
+function getUserLocale() {
+  return navigator.language || navigator.userLanguage || 'en-US'
+}
+
+function isDayFirstLocale() {
+  const locale = getUserLocale()
+  const monthFirstLocales = ['en-US', 'en-PH']
+  return !monthFirstLocales.some(mf => locale.startsWith(mf))
+}
+
 function formatDate(dateString, format) {
   if (!dateString || dateString.toString().trim() === '') return dateString
 
@@ -14,7 +24,40 @@ function formatDate(dateString, format) {
         date = new Date(dateString)
       }
     } 
-    // Handle string dates with separators
+    // Handle ambiguous date formats (DD/MM/YYYY vs MM/DD/YYYY)
+    else if (dateString.toString().match(/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/)) {
+      const str = dateString.toString()
+      const parts = str.split(/[\/\-\.]/)
+      const year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2])
+      
+      // Use locale to determine if it's day-first or month-first
+      if (isDayFirstLocale()) {
+        // DD/MM/YYYY format (Europe, most of world)
+        const day = parseInt(parts[0])
+        const month = parseInt(parts[1]) - 1
+        date = new Date(year, month, day)
+      } else {
+        // MM/DD/YYYY format (US)
+        const month = parseInt(parts[0]) - 1
+        const day = parseInt(parts[1])
+        date = new Date(year, month, day)
+      }
+      
+      // Validate the parsed date
+      if (isNaN(date.getTime())) {
+        // If failed, try the opposite format
+        if (isDayFirstLocale()) {
+          const month = parseInt(parts[0]) - 1
+          const day = parseInt(parts[1])
+          date = new Date(year, month, day)
+        } else {
+          const day = parseInt(parts[0])
+          const month = parseInt(parts[1]) - 1
+          date = new Date(year, month, day)
+        }
+      }
+    }
+    // Handle ISO format and other standard formats
     else if (dateString.toString().includes('/') || dateString.toString().includes('-') || dateString.toString().includes('.')) {
       date = new Date(dateString)
     } 
@@ -25,7 +68,7 @@ function formatDate(dateString, format) {
 
     // Validate the date
     if (isNaN(date.getTime())) {
-      console.warn('Invalid date:', dateString)
+      console.warn('Invalid date:', dateString, `(user locale: ${getUserLocale()})`)
       return dateString
     }
 
@@ -34,18 +77,8 @@ function formatDate(dateString, format) {
     const year = date.getFullYear()
 
     const monthNames = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December'
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ]
     const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
     const threeLetterMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
@@ -406,6 +439,14 @@ export function applyFormatting(data, config) {
       }
 
       formattedRow[key] = value
+    })
+
+    // Attach metadata to the row object (non-enumerable but configurable for Vue reactivity)
+    Object.defineProperty(formattedRow, '__metadata', {
+      value: metadata,
+      enumerable: false,
+      writable: false,
+      configurable: true // 🆕 Changed from false to true - fixes Vue proxy issue
     })
 
     return formattedRow

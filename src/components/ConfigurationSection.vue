@@ -1,6 +1,6 @@
 <template>
   <div class="configuration-section">
-    <h3 class="configuration-title">✨ Formatting Options</h3>
+    <h3 class="configuration-title">Formatting Options</h3>
 
     <!-- Date Format -->
     <div class="field-group">

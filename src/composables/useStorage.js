@@ -2,12 +2,15 @@ import { ref, watch } from 'vue'
 import { 
   saveFileToIndexedDB, 
   loadFileFromIndexedDB, 
+  getArrayBuffer,
   indexedDBDataToFile,
   deleteFileFromIndexedDB,
-  migrateFromLocalStorage
+  migrateFromLocalStorage,
+  cleanupLegacyStorage
 } from '../utils/indexedDBStorage'
 
 const STORAGE_PREFIX = 'specimensLabeler_'
+const DEBOUNCE_DELAY_MS = 500
 
 // Configuration state
 const configuration = ref({
@@ -25,9 +28,9 @@ const configuration = ref({
   },
   formatting: {
     date: {
-      mode: 'none', // 'none' or 'column'
+      mode: 'none',
       column: '',
-      format: 'roman' // 'roman', 'iso', 'english', 'threeletter'
+      format: 'english' // Changed from 'roman' to 'english' (May 26, 2025)
     },
     decimalFormat: 'dot',
     geocoord: {
@@ -40,12 +43,15 @@ const configuration = ref({
   }
 })
 
-// Template storage
+// Template storage - store file data with ArrayBuffer
 const storedTemplate = ref(null)
 const storedExcel = ref(null)
 
+// Debounce timer for auto-save
+let saveDebounceTimer = null
+
 export function useStorage() {
-  // Load configuration from localStorage (configuration is small, keep in LocalStorage)
+  // Load configuration from localStorage
   const loadConfiguration = () => {
     try {
       const saved = localStorage.getItem(`${STORAGE_PREFIX}configuration`)
@@ -56,7 +62,7 @@ export function useStorage() {
           parsed.formatting.date = {
             mode: 'none',
             column: '',
-            format: parsed.formatting.dateFormat || 'roman'
+            format: parsed.formatting.dateFormat || 'english' // Changed default from 'roman'
           }
           delete parsed.formatting.dateFormat
         }
@@ -80,35 +86,28 @@ export function useStorage() {
     }
   }
 
-  // Watch for configuration changes and auto-save
+  // Debounced save function
+  const debouncedSave = (newConfig) => {
+    if (saveDebounceTimer) {
+      clearTimeout(saveDebounceTimer)
+    }
+    
+    saveDebounceTimer = setTimeout(() => {
+      saveConfiguration(newConfig)
+      saveDebounceTimer = null
+    }, DEBOUNCE_DELAY_MS)
+  }
+
+  // Watch for configuration changes with debouncing
   watch(
     configuration,
     (newConfig) => {
-      saveConfiguration(newConfig)
+      debouncedSave(newConfig)
     },
-    { deep: true, immediate: false, flush: 'post' }
+    { deep: true, immediate: false }
   )
 
-  // Save individual value
-  const saveIndividualValue = (key, value) => {
-    try {
-      localStorage.setItem(`${STORAGE_PREFIX}${key}`, value)
-    } catch (error) {
-      console.warn('Failed to save individual value:', error)
-    }
-  }
-
-  // Load individual value
-  const loadIndividualValue = (key, defaultValue = '') => {
-    try {
-      return localStorage.getItem(`${STORAGE_PREFIX}${key}`) || defaultValue
-    } catch (error) {
-      console.warn('Failed to load individual value:', error)
-      return defaultValue
-    }
-  }
-
-  // Template storage functions (using IndexedDB)
+  // Template storage functions (using IndexedDB with ArrayBuffer)
   const saveTemplateToStorage = async (file) => {
     try {
       const fileData = await saveFileToIndexedDB('template', file)
@@ -134,25 +133,29 @@ export function useStorage() {
     return null
   }
 
+  // Get ArrayBuffer for generation (avoids stale File references)
+  const getStoredTemplateArrayBuffer = () => {
+    try {
+      if (!storedTemplate.value) {
+        return null
+      }
+      return getArrayBuffer(storedTemplate.value)
+    } catch (error) {
+      console.warn('Failed to get template ArrayBuffer:', error)
+      return null
+    }
+  }
+
+  // Get File object for display purposes only
   const useStoredTemplate = () => {
     try {
       if (!storedTemplate.value) {
         return null
       }
-
       return indexedDBDataToFile(storedTemplate.value)
     } catch (error) {
       console.warn('Failed to use stored template:', error)
       return null
-    }
-  }
-
-  const clearStoredTemplate = async () => {
-    try {
-      await deleteFileFromIndexedDB('template')
-      storedTemplate.value = null
-    } catch (error) {
-      console.warn('Failed to clear stored template:', error)
     }
   }
 
@@ -187,7 +190,6 @@ export function useStorage() {
       if (!storedExcel.value) {
         return null
       }
-
       return indexedDBDataToFile(storedExcel.value)
     } catch (error) {
       console.error('Failed to restore Excel file:', error)
@@ -195,34 +197,9 @@ export function useStorage() {
     }
   }
 
-  // Load saved form values
-  const loadSavedFormValues = () => {
-    const values = {}
-    const keys = [
-      'sheetName',
-      'start-row',
-      'end-row',
-      'duplicates-column',
-      'add-subtract',
-      'fixed-duplicates',
-      'date-format',
-      'geocoord-single-column',
-      'geocoord-lat-column',
-      'geocoord-lon-column',
-      'record-selection',
-      'duplicates-mode',
-      'decimal-format',
-      'geocoord-mode'
-    ]
-
-    keys.forEach((key) => {
-      const value = loadIndividualValue(key)
-      if (value) {
-        values[key] = value
-      }
-    })
-
-    return values
+  // Initialize: cleanup legacy storage on first load
+  const initializeStorage = async () => {
+    cleanupLegacyStorage()
   }
 
   return {
@@ -230,15 +207,13 @@ export function useStorage() {
     storedTemplate,
     loadConfiguration,
     saveConfiguration,
-    saveIndividualValue,
-    loadIndividualValue,
     saveTemplateToStorage,
     loadStoredTemplate,
+    getStoredTemplateArrayBuffer, // 🆕 Use this for generation
     useStoredTemplate,
-    clearStoredTemplate,
     saveExcelToStorage,
     loadStoredExcel,
     useStoredExcel,
-    loadSavedFormValues
+    initializeStorage // 🆕 Call on app mount
   }
 }

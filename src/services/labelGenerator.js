@@ -2,6 +2,7 @@ import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 import { saveAs } from 'file-saver'
 import { applyFormatting } from '../utils/formatter'
+import { VALIDATION_LIMITS, PROGRESS_UPDATE } from '../utils/constants'
 
 export class LabelGenerator {
   async validateTemplate(templateArrayBuffer, data) {
@@ -19,19 +20,43 @@ export class LabelGenerator {
       const templateContent = doc.getFullText()
 
       const headers = Object.keys(data[0])
-      const placeholderPattern = /\{([^}]+)#\d+\}/g
-      const matches = templateContent.match(placeholderPattern) || []
+      const placeholderPattern = /\{([^}]+)#(\d+)\}/g
+      const matches = [...templateContent.matchAll(placeholderPattern)]
 
       const missingColumns = []
+      const placeholderNumbers = new Set()
+      
       matches.forEach((match) => {
-        const columnName = match.replace(/\{([^}]+)#\d+\}/, '$1').trim()
+        const columnName = match[1].trim()
+        const number = parseInt(match[2])
+        
+        // Check if column exists in data
         if (!headers.includes(columnName)) {
           missingColumns.push(columnName)
         }
+        
+        // Track placeholder numbers
+        placeholderNumbers.add(number)
       })
 
       if (missingColumns.length > 0) {
-        throw new Error(`Template references missing columns: ${missingColumns.join(', ')}`)
+        throw new Error(`Template references missing columns: ${[...new Set(missingColumns)].join(', ')}`)
+      }
+      
+      // 🆕 Validate placeholder numbering (no gaps)
+      if (placeholderNumbers.size > 0) {
+        const numbers = Array.from(placeholderNumbers).sort((a, b) => a - b)
+        const maxNumber = Math.max(...numbers)
+        
+        for (let i = 1; i <= maxNumber; i++) {
+          if (!numbers.includes(i)) {
+            throw new Error(
+              `❌ Template has placeholder numbering gap: Missing #${i}\n\n` +
+              `Found placeholders: ${numbers.map(n => `#${n}`).join(', ')}\n\n` +
+              `💡 Fix: Make sure your placeholders are numbered sequentially starting from #1 without gaps.`
+            )
+          }
+        }
       }
     } catch (error) {
       if (error.properties && error.properties.errors) {
@@ -71,7 +96,7 @@ export class LabelGenerator {
         
         if (match) {
           const loopContent = match[1]
-          // Check if there's already a page break before the closing tag
+          // Check if there's already a page break before the closing {/pages} tag
           const hasPageBreak = loopContent.includes('<w:br w:type="page"/>')
           
           if (!hasPageBreak) {
@@ -118,27 +143,15 @@ export class LabelGenerator {
     return maxNumber || 4
   }
 
-  async generateLabels(templateFile, data, config, progressCallback) {
+  async generateLabels(templateArrayBuffer, data, config, progressCallback) {
     try {
-      if (!templateFile) {
-        throw new Error('No template file provided')
+      if (!templateArrayBuffer) {
+        throw new Error('No template data provided')
       }
 
       progressCallback?.('Validating template...')
       
-      // Try to read the file with better error handling
-      let templateArrayBuffer
-      try {
-        templateArrayBuffer = await templateFile.arrayBuffer()
-      } catch (readError) {
-        throw new Error(
-          'Cannot read template file. If you just edited the file in Word, please re-upload it. ' +
-          'Make sure the file is not open in another application.'
-        )
-      }
-      
-      // First, ensure pages loop before validation
-      progressCallback?.('Preparing template...')
+      // Use ArrayBuffer directly - no more stale File references!
       const modifiedTemplateArrayBuffer = await this.ensurePagesLoop(templateArrayBuffer)
       
       await this.validateTemplate(modifiedTemplateArrayBuffer, data)
@@ -169,7 +182,7 @@ export class LabelGenerator {
       const duplicatedData = await this.applyDuplicatesHandling(processedData, config, progressCallback)
 
       // VALIDATION: Check if duplicate count is reasonable
-      if (duplicatedData.length > processedData.length * 100) {
+      if (duplicatedData.length > processedData.length * VALIDATION_LIMITS.MAX_DUPLICATE_MULTIPLIER) {
         throw new Error(
           `⚠️ Duplicate handling created ${duplicatedData.length} labels from ${processedData.length} records. ` +
           `This seems excessive. Please check your duplicate settings.`
@@ -180,7 +193,7 @@ export class LabelGenerator {
       const totalPages = Math.ceil(duplicatedData.length / itemsPerPage)
       
       // VALIDATION: Check if page count is reasonable
-      if (totalPages > 10000) {
+      if (totalPages > VALIDATION_LIMITS.MAX_PAGE_COUNT) {
         throw new Error(
           `⚠️ Would generate ${totalPages} pages (${duplicatedData.length} labels ÷ ${itemsPerPage} per page). ` +
           `This is too large. Please check:\n` +
@@ -220,9 +233,9 @@ export class LabelGenerator {
         pages.push(numberedItems)
 
         // Update progress and yield control periodically
-        if (pages.length % 5 === 0) {
+        if (pages.length % PROGRESS_UPDATE.CHUNK_SIZE === 0) {
           progressCallback?.(`Processing data (page ${pages.length} of ${totalPages})...`)
-          await new Promise((resolve) => setTimeout(resolve, 1))
+          await new Promise((resolve) => setTimeout(resolve, PROGRESS_UPDATE.YIELD_INTERVAL_MS))
         }
       }
 
@@ -255,7 +268,7 @@ export class LabelGenerator {
 
       // VALIDATION: Check output size
       const sizeMB = outputArrayBuffer.byteLength / 1024 / 1024
-      if (sizeMB > 50) {
+      if (sizeMB > VALIDATION_LIMITS.MAX_FILE_SIZE_MB) {
         console.warn(`⚠️ Generated file is ${sizeMB.toFixed(2)} MB - this is unusually large!`)
       }
 
@@ -311,7 +324,7 @@ export class LabelGenerator {
           duplicateCount = fixed
         }
 
-        if (duplicateCount > 50) {
+        if (duplicateCount > VALIDATION_LIMITS.MAX_DUPLICATE_COUNT) {
           console.warn(`⚠️ Row ${i} has duplicate count of ${duplicateCount} - this seems high`)
         }
         
@@ -322,10 +335,10 @@ export class LabelGenerator {
           result.push({ ...row })
         }
 
-        if (i % 10 === 0) {
+        if (i % PROGRESS_UPDATE.FREQUENCY === 0) {
           const progress = Math.round((i / totalRecords) * 100)
           progressCallback?.(`Processing duplicates (${i + 1} of ${totalRecords} records, ${progress}%)...`)
-          await new Promise((resolve) => setTimeout(resolve, 1))
+          await new Promise((resolve) => setTimeout(resolve, PROGRESS_UPDATE.YIELD_INTERVAL_MS))
         }
       }
     } else {
@@ -347,7 +360,7 @@ export class LabelGenerator {
         }
 
         if (duplicateCount < 1) duplicateCount = 1
-        if (duplicateCount > 50) {
+        if (duplicateCount > VALIDATION_LIMITS.MAX_DUPLICATE_COUNT) {
           console.warn(`⚠️ Row ${i} has duplicate count of ${duplicateCount} - this seems high`)
         }
 
@@ -363,10 +376,10 @@ export class LabelGenerator {
           }
         }
         
-        if (copyNum % 5 === 0) {
+        if (copyNum % PROGRESS_UPDATE.CHUNK_SIZE === 0) {
           const progress = Math.round((copyNum / maxCopies) * 100)
           progressCallback?.(`Processing duplicates (set ${copyNum + 1} of ${maxCopies}, ${progress}%)...`)
-          await new Promise((resolve) => setTimeout(resolve, 1))
+          await new Promise((resolve) => setTimeout(resolve, PROGRESS_UPDATE.YIELD_INTERVAL_MS))
         }
       }
     }
