@@ -80,6 +80,7 @@ function formatDate(dateString, format) {
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
     ]
+    const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
     const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
     const threeLetterMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
@@ -90,6 +91,8 @@ function formatDate(dateString, format) {
         return `${year}-${month}-${day}`
       case 'english':
         return `${monthNames[date.getMonth()]} ${day}, ${year}`
+      case 'short':
+        return `${shortMonthNames[date.getMonth()]} ${day}, ${year}`
       case 'threeletter':
         return `${day} ${threeLetterMonths[date.getMonth()]} ${year}`
       default:

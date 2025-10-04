@@ -20,30 +20,56 @@ export class LabelGenerator {
       const templateContent = doc.getFullText()
 
       const headers = Object.keys(data[0])
-      const placeholderPattern = /\{([^}]+)#(\d+)\}/g
-      const matches = [...templateContent.matchAll(placeholderPattern)]
+      
+      // Match both numbered and simple placeholders, but exclude loop tags like {#pages} and {/pages}
+      const numberedPattern = /\{([^}#\/]+)#(\d+)\}/g
+      const simplePattern = /\{([^}#\/]+)\}/g
+      
+      const numberedMatches = [...templateContent.matchAll(numberedPattern)]
+      const simpleMatches = [...templateContent.matchAll(simplePattern)]
 
       const missingColumns = []
       const placeholderNumbers = new Set()
       
-      matches.forEach((match) => {
+      // Check numbered placeholders
+      numberedMatches.forEach((match) => {
         const columnName = match[1].trim()
         const number = parseInt(match[2])
         
-        // Check if column exists in data
+        // Skip if it's a loop tag
+        if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
+          return
+        }
+        
         if (!headers.includes(columnName)) {
           missingColumns.push(columnName)
         }
         
-        // Track placeholder numbers
         placeholderNumbers.add(number)
+      })
+      
+      // Check simple placeholders (treat as #1)
+      simpleMatches.forEach((match) => {
+        const columnName = match[1].trim()
+        
+        // Skip loop tags and special tags
+        if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
+          return
+        }
+        
+        if (!headers.includes(columnName)) {
+          missingColumns.push(columnName)
+        }
+        
+        // Simple placeholders count as #1
+        placeholderNumbers.add(1)
       })
 
       if (missingColumns.length > 0) {
         throw new Error(`Template references missing columns: ${[...new Set(missingColumns)].join(', ')}`)
       }
       
-      // 🆕 Validate placeholder numbering (no gaps)
+      // Validate placeholder numbering (no gaps)
       if (placeholderNumbers.size > 0) {
         const numbers = Array.from(placeholderNumbers).sort((a, b) => a - b)
         const maxNumber = Math.max(...numbers)
@@ -129,16 +155,43 @@ export class LabelGenerator {
     const doc = new Docxtemplater(zip)
     const templateContent = doc.getFullText()
 
-    const placeholderPattern = /\{[^}]+#(\d+)\}/g
-    const matches = templateContent.match(placeholderPattern) || []
+    // Match both numbered and simple placeholders, excluding loop tags
+    const numberedPattern = /\{([^}#\/]+)#(\d+)\}/g
+    const simplePattern = /\{([^}#\/]+)\}/g
+    
+    const numberedMatches = [...templateContent.matchAll(numberedPattern)]
+    const simpleMatches = [...templateContent.matchAll(simplePattern)]
 
     let maxNumber = 0
-    matches.forEach((match) => {
-      const number = parseInt(match.replace(/\{[^}]+#(\d+)\}/, '$1'))
+    
+    // Check numbered placeholders
+    numberedMatches.forEach((match) => {
+      const columnName = match[1].trim()
+      const number = parseInt(match[2])
+      
+      // Skip loop tags
+      if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
+        return
+      }
+      
       if (number > maxNumber) {
         maxNumber = number
       }
     })
+    
+    // If only simple placeholders exist, check them
+    if (maxNumber === 0) {
+      simpleMatches.forEach((match) => {
+        const columnName = match[1].trim()
+        
+        // Skip loop tags
+        if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
+          return
+        }
+        
+        maxNumber = 1
+      })
+    }
 
     return maxNumber || 4
   }
@@ -209,14 +262,18 @@ export class LabelGenerator {
       for (let i = 0; i < duplicatedData.length; i += itemsPerPage) {
         const pageData = duplicatedData.slice(i, i + itemsPerPage)
 
-        // Create numbered items for this page
         const numberedItems = {}
         
-        // Only process actual data items
+        // Process actual data items
         for (let j = 0; j < itemsPerPage; j++) {
           const item = pageData[j] || {}
           Object.keys(item).forEach((key) => {
+            // Create both numbered and simple placeholders
             numberedItems[`${key}#${j + 1}`] = item[key] || ''
+            // For #1, also create simple placeholder
+            if (j === 0) {
+              numberedItems[key] = item[key] || ''
+            }
           })
         }
 
@@ -226,6 +283,9 @@ export class LabelGenerator {
           for (let j = pageData.length; j < itemsPerPage; j++) {
             sampleKeys.forEach((key) => {
               numberedItems[`${key}#${j + 1}`] = ''
+              if (j === 0) {
+                numberedItems[key] = ''
+              }
             })
           }
         }

@@ -17,7 +17,7 @@ body {
 
 a {
   text-decoration: none;
-  color: #2c5530;
+  color: #667eea;
   transition: 0.3s;
 }
 
@@ -36,8 +36,23 @@ input:focus,
 select:focus,
 textarea:focus {
   outline: none;
-  border-color: #2c5530;
-  box-shadow: 0 0 0 2px rgba(44, 85, 48, 0.2);
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
+}
+
+/* Radio button styling */
+input[type='radio'] {
+  accent-color: #667eea;
+  cursor: pointer;
+}
+
+input[type='radio']:checked {
+  accent-color: #667eea;
+}
+
+input[type='checkbox'] {
+  accent-color: #667eea;
+  cursor: pointer;
 }
 
 button {

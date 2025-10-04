@@ -30,7 +30,9 @@ const configuration = ref({
     date: {
       mode: 'none',
       column: '',
-      format: 'english' // Changed from 'roman' to 'english' (May 26, 2025)
+      format: 'english',
+      locale: 'en-US', // 🆕 Default to English
+      customLocale: '' // 🆕 For custom locale input
     },
     decimalFormat: 'dot',
     geocoord: {
@@ -62,9 +64,16 @@ export function useStorage() {
           parsed.formatting.date = {
             mode: 'none',
             column: '',
-            format: parsed.formatting.dateFormat || 'english' // Changed default from 'roman'
+            format: parsed.formatting.dateFormat || 'english',
+            locale: 'en-US', // 🆕 Default for migrated configs
+            customLocale: ''
           }
           delete parsed.formatting.dateFormat
+        }
+        // 🆕 Add locale if missing from existing configs
+        if (parsed.formatting?.date && !parsed.formatting.date.locale) {
+          parsed.formatting.date.locale = 'en-US'
+          parsed.formatting.date.customLocale = ''
         }
         if (parsed.duplicates && !parsed.duplicates.collate) {
           parsed.duplicates.collate = 'collated'

@@ -49,10 +49,11 @@
               :disabled="localConfig.formatting.date.mode !== 'column'"
               @change="emitUpdate"
             >
-              <option value="roman">Roman numeral month (26-V-2025)</option>
-              <option value="iso">Year Month Day (2025-05-26)</option>
-              <option value="english">Month name Day, Year (May 26, 2025)</option>
-              <option value="threeletter">Three-letter month (26 MAY 2025)</option>
+            <option value="english">Month name Day, Year (January 26, 2025)</option>
+              <option value="short">Three-letter month Day, Year (Jan 26, 2025)</option>
+              <option value="roman">Roman numeral month (26-I-2025)</option>
+              <option value="iso">Year Month Day (2025-01-26)</option>
+              <option value="threeletter">Three-letter month (26 JAN 2025)</option>
             </select>
           </div>
           
@@ -246,31 +247,35 @@ const emitUpdate = () => {
 
 <style scoped>
 .configuration-section {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  padding: 20px;
-  margin-top: 10px;
+  background: white;
+  border: none;
+  border-radius: 0;
+  padding: 0;
+  margin-top: 0;
 }
 
 .configuration-title {
-  margin: 0 0 20px 0;
-  color: #2d3748;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  margin: 0;
   font-size: 18px;
-  font-weight: 600;
-  padding-bottom: 10px;
-  border-bottom: 2px solid #e2e8f0;
+  font-weight: 700;
+  padding: 16px 20px;
+  border-bottom: none;
+  letter-spacing: 0.5px;
 }
 
 .field-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 20px;
+  margin-bottom: 0;
+  padding: 20px;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .field-group:last-child {
-  margin-bottom: 0;
+  border-bottom: none;
 }
 
 .field-group > label {
@@ -309,8 +314,8 @@ select {
 input:focus,
 select:focus {
   outline: none;
-  border-color: #2c5530;
-  box-shadow: 0 0 0 2px rgba(44, 85, 48, 0.2);
+  border-color: #667eea;
+  box-shadow: 0 0 0 2px rgba(102, 126, 234, 0.2);
 }
 
 .radio-group {
@@ -338,6 +343,13 @@ select:focus {
   margin-bottom: 8px;
   cursor: pointer;
   font-weight: normal;
+}
+
+.radio-group input[type='radio'] {
+  accent-color: #667eea;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
 }
 
 .radio-group label:last-child {
@@ -386,7 +398,7 @@ select:focus {
   margin-top: 12px;
   padding: 10px;
   background: #f8f9fa;
-  border-left: 3px solid #2c5530;
+  border-left: 3px solid #667eea;
   font-size: 0.85rem;
   color: #555;
 }
@@ -394,7 +406,7 @@ select:focus {
 .format-help strong {
   display: block;
   margin-bottom: 6px;
-  color: #2c5530;
+  color: #667eea;
 }
 
 .format-help ul {
@@ -411,14 +423,14 @@ select:focus {
   margin-top: 8px;
   padding: 6px 10px;
   background: #f8f9fa;
-  border-left: 3px solid #2c5530;
+  border-left: 3px solid #667eea;
   font-size: 0.75rem;
   color: #555;
   line-height: 1.4;
 }
 
 .format-help-inline strong {
-  color: #2c5530;
+  color: #667eea;
   margin-right: 4px;
 }
 

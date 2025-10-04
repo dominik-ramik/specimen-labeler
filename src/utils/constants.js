@@ -23,7 +23,14 @@ export const DATE_FORMATS = {
   ROMAN: 'roman',
   ISO: 'iso',
   ENGLISH: 'english',
+  SHORT: 'short',
   THREE_LETTER: 'threeletter'
+}
+
+export const DATE_LOCALES = {
+  ENGLISH: 'en-US',
+  CURRENT: 'current', // Will be resolved to navigator.language
+  CUSTOM: 'custom'
 }
 
 export const DECIMAL_FORMATS = {

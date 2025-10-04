@@ -1,12 +1,16 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import FileDropZone from './components/FileDropZone.vue'
 import ConfigurationSection from './components/ConfigurationSection.vue'
+import DataSelectionSection from './components/DataSelectionSection.vue'
+import OutputMessage from './components/OutputMessage.vue'
+import LoadingOverlay from './components/LoadingOverlay.vue'
 import HowToUse from './components/HowToUse.vue'
 import { useAppState } from './composables/useAppState'
 import { useStorage } from './composables/useStorage'
-import { loadExcelMetadata, loadColumnNames, getExcelData, saveSheetName } from './utils/excelHandler' // 🆕 Added saveSheetName
+import { loadExcelMetadata, loadColumnNames, getExcelData, saveSheetName } from './utils/excelHandler'
 import { labelGenerator } from './services/labelGenerator'
+import { deleteFileFromIndexedDB } from './utils/indexedDBStorage'
 
 const {
   templateFile,
@@ -204,7 +208,7 @@ const generateLabels = async () => {
 
     hideLoading()
     displayOutput(
-      `✅ Success! Generated ${result.stats.pages} pages (${result.stats.itemsPerPage} labels per page)`,
+      `Success! Generated ${result.stats.pages} pages (${result.stats.itemsPerPage} labels per page)`,
       'success'
     )
   } catch (error) {
@@ -262,6 +266,11 @@ const validationSummary = computed(() => {
   }
   
   return issues.length > 0 ? issues : null
+})
+
+// Add computed for total rows
+const totalDataRows = computed(() => {
+  return getCachedExcelData()?.length || 1
 })
 
 // UI Helper functions
@@ -342,20 +351,101 @@ const shouldShowCollateOption = computed(() => {
   
   return (mode === 'fixed' && fixed > 1) || (mode === 'column' && column !== '')
 })
+
+// Handle template file clear
+const handleTemplateClear = async () => {
+  try {
+    // Clear from state
+    setTemplateFile(null)
+    templateFilename.value = ''
+    templateFilesize.value = ''
+    isTemplateSaved.value = false
+    
+    // Clear from IndexedDB
+    await deleteFileFromIndexedDB('template')
+    
+    console.log('Template file cleared')
+  } catch (error) {
+    console.error('Error clearing template:', error)
+  }
+}
+
+// Handle Excel file clear
+const handleExcelClear = async () => {
+  try {
+    // Clear from state
+    setExcelFile(null)
+    excelFilename.value = ''
+    excelFilesize.value = ''
+    isExcelSaved.value = false
+    
+    // Clear sheet selection
+    selectedSheet.value = ''
+    setSheetName(null)
+    setHeaders([])
+    setCachedExcelData(null)
+    availableSheets.value = []
+    fileType.value = ''
+    
+    // Clear from IndexedDB
+    await deleteFileFromIndexedDB('excel')
+    
+    // Clear from localStorage
+    localStorage.removeItem('specimensLabeler_excelFileName')
+    localStorage.removeItem('specimensLabeler_sheetName')
+    
+    console.log('Excel file cleared')
+  } catch (error) {
+    console.error('Error clearing Excel file:', error)
+  }
+}
+
+// Add ref for template help
+const templateHelpRef = ref(null)
+
+const scrollToTemplateHelp = () => {
+  nextTick(() => {
+    if (templateHelpRef.value) {
+      // First open the examples section
+      templateHelpRef.value.openExamples()
+      
+      // Wait a bit for the section to expand
+      setTimeout(() => {
+        // Scroll to the help section
+        templateHelpRef.value.$el.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'start' 
+        })
+        
+        // Additional scroll adjustment to show the "How to Construct" heading
+        setTimeout(() => {
+          window.scrollBy({ 
+            top: 100, 
+            behavior: 'smooth' 
+          })
+        }, 300)
+      }, 100)
+    }
+  })
+}
 </script>
 
 <template>
   <div class="app-container">
-    <h1>🌿 Specimens Labeler</h1>
-
-    <!-- Output Messages - Moved to top for visibility -->
-    <div v-if="showOutput" class="output" :class="outputType">
-      <button class="output-close" @click="showOutput = false" aria-label="Close message">×</button>
-      <div v-html="outputMessage"></div>
+    <div class="header">
+      <h1>🌿 Specimens Labeler</h1>
+      <p class="subtitle">Streamline your specimen labeling</p>
     </div>
 
+    <!-- Output Messages -->
+    <OutputMessage
+      :show="showOutput"
+      :message="outputMessage"
+      :type="outputType"
+      @close="showOutput = false"
+    />
+
     <form @submit.prevent="generateLabels">
-      <!-- Three-column grid layout -->
       <div class="main-content-grid">
         
         <!-- Section 1: Files Block -->
@@ -363,7 +453,7 @@ const shouldShowCollateOption = computed(() => {
           <h2>Upload Files</h2>
           <div class="files-content">
             <FileDropZone
-              icon="📄"
+              heading="Template"
               text="Drop Word template here"
               subtext="or click to browse (.docx)"
               accept=".docx"
@@ -372,10 +462,12 @@ const shouldShowCollateOption = computed(() => {
               :is-saved="isTemplateSaved"
               file-type="template"
               @file-selected="handleTemplateFile"
+              @file-cleared="handleTemplateClear"
+              @show-template-help="scrollToTemplateHelp"
             />
             
             <FileDropZone
-              icon="📊"
+              heading="Collection Spreadsheet"
               text="Drop Excel or CSV file here"
               subtext="or click to browse (.xlsx, .csv)"
               accept=".xlsx,.xls,.csv,.tsv"
@@ -384,9 +476,9 @@ const shouldShowCollateOption = computed(() => {
               :is-saved="isExcelSaved"
               file-type="excel"
               @file-selected="handleExcelFile"
+              @file-cleared="handleExcelClear"
             >
               <template #extra-content>
-                <!-- Only show sheet selector for Excel files, not CSV -->
                 <div
                   v-if="availableSheets.length > 0 && fileType === 'excel'"
                   class="sheet-selector-container"
@@ -405,158 +497,29 @@ const shouldShowCollateOption = computed(() => {
                   </select>
                 </div>
                 
-                <!-- Show info for CSV files -->
                 <div
                   v-if="fileType === 'csv' && excelFilename"
                   class="csv-info"
                   @click.stop
                 >
-                  <span class="csv-badge">📄 CSV File - Ready to use</span>
+                  <span class="csv-badge">✓ CSV File - Ready to use</span>
                 </div>
               </template>
             </FileDropZone>
-
-            <!-- Data Selection Section - Only shown when files are ready -->
-            <div v-if="isReady" class="data-selection-section">
-              <h3>Data Selection</h3>
-              
-              <!-- Record Selection -->
-              <div class="selection-field">
-                <label class="field-label">Record Selection</label>
-                <div class="radio-group">
-                  <label>
-                    <input
-                      type="radio"
-                      value="all"
-                      v-model="configuration.recordSelection.mode"
-                    />
-                    All Records
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      value="from-to-end"
-                      v-model="configuration.recordSelection.mode"
-                    />
-                    From Row
-                    <input
-                      type="number"
-                      min="1"
-                      v-model.number="configuration.recordSelection.startRow"
-                      :disabled="configuration.recordSelection.mode !== 'from-to-end'"
-                    />
-                    to End
-                  </label>
-                  <label>
-                    <input
-                      type="radio"
-                      value="from-to-row"
-                      v-model="configuration.recordSelection.mode"
-                    />
-                    From Row
-                    <input
-                      type="number"
-                      min="1"
-                      v-model.number="configuration.recordSelection.startRow"
-                      :disabled="configuration.recordSelection.mode !== 'from-to-row'"
-                    />
-                    to Row
-                    <input
-                      type="number"
-                      min="1"
-                      v-model.number="configuration.recordSelection.endRow"
-                      :disabled="configuration.recordSelection.mode !== 'from-to-row'"
-                    />
-                  </label>
-                </div>
-              </div>
-
-              <!-- Duplicates Handling -->
-              <div class="selection-field">
-                <label class="field-label">How many copies of each label to generate</label>
-                <div class="radio-group">
-                  <label>
-                    <input
-                      type="radio"
-                      value="column"
-                      v-model="configuration.duplicates.mode"
-                    />
-                    Get from Column
-                  </label>
-                  
-                  <div class="nested-controls">
-                    <div class="nested-row">
-                      <label for="duplicates-column">Column:</label>
-                      <select
-                        id="duplicates-column"
-                        v-model="configuration.duplicates.column"
-                        :disabled="configuration.duplicates.mode !== 'column'"
-                      >
-                        <option value="">Select a column...</option>
-                        <option v-for="header in headers" :key="header" :value="header">
-                          {{ header }}
-                        </option>
-                      </select>
-                      <label for="add-subtract" title="Add or subtract from the column value">+/-:</label>
-                      <input
-                        id="add-subtract"
-                        type="number"
-                        v-model.number="configuration.duplicates.addSubtract"
-                        placeholder="0"
-                      />
-                    </div>
-                    <div class="helper-text">
-                      Example: If column value is 3 and +/- is -1, you'll get 2 copies
-                    </div>
-                  </div>
-                  
-                  <label>
-                    <input
-                      type="radio"
-                      value="fixed"
-                      v-model="configuration.duplicates.mode"
-                    />
-                    Fixed Number
-                    <input
-                      type="number"
-                      min="1"
-                      v-model.number="configuration.duplicates.fixed"
-                      :disabled="configuration.duplicates.mode !== 'fixed'"
-                    />
-                  </label>
-                  
-                  <!-- Collate option -->
-                  <div 
-                    v-if="shouldShowCollateOption" 
-                    class="collate-option"
-                  >
-                    <label class="collate-label">Order:</label>
-                    <div class="radio-group-inline">
-                      <label>
-                        <input
-                          type="radio"
-                          value="collated"
-                          v-model="configuration.duplicates.collate"
-                        />
-                        Sets Together (A,B,C,A,B,C)
-                      </label>
-                      <label>
-                        <input
-                          type="radio"
-                          value="uncollated"
-                          v-model="configuration.duplicates.collate"
-                        />
-                        Duplicates Together (A,A,A,B,B,B)
-                      </label>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
           </div>
         </div>
 
-        <!-- Section 2: Configuration Block - Only show when isReady -->
+        <!-- Section 2: Data Selection Block -->
+        <div v-if="isReady" class="section-block data-selection-block">
+          <DataSelectionSection
+            :config="configuration"
+            :headers="headers"
+            :total-rows="totalDataRows"
+            @update:config="handleConfigUpdate"
+          />
+        </div>
+
+        <!-- Section 3: Configuration Block -->
         <div v-if="isReady" class="section-block config-block">
           <ConfigurationSection 
             :config="configuration" 
@@ -565,11 +528,10 @@ const shouldShowCollateOption = computed(() => {
           />
         </div>
 
-        <!-- Section 3: Generate Block - Only show when isReady -->
+        <!-- Section 4: Generate Block -->
         <div v-if="isReady" class="section-block generate-block">
           <h2>Generate Labels</h2>
           
-          <!-- Validation warnings -->
           <div v-if="validationSummary" class="validation-warnings">
             <div v-for="(issue, index) in validationSummary" :key="index" class="validation-item">
               {{ issue }}
@@ -581,7 +543,7 @@ const shouldShowCollateOption = computed(() => {
             class="generate-btn"
             :disabled="!isReady || isGenerating"
             @click="generateLabels"
-            :title="isReady ? 'Generate labels (Ctrl+Enter)' : 'Please upload files first'"
+            :title="isReady ? 'Generate labels' : 'Please upload files first'"
           >
             {{ isGenerating ? 'Processing...' : 'Generate Labels' }}
           </button>
@@ -591,19 +553,14 @@ const shouldShowCollateOption = computed(() => {
     </form>
 
     <!-- Loading Overlay -->
-    <div v-if="loading" class="loading-overlay">
-      <div class="loading-content">
-        <div class="spinner"></div>
-        <div class="loading-message">{{ loadingMessage }}</div>
-        <div v-if="loadingProgress > 0" class="progress-bar">
-          <div class="progress-fill" :style="{ width: loadingProgress + '%' }"></div>
-        </div>
-        <div v-if="loadingProgress > 0" class="progress-text">{{ loadingProgress }}%</div>
-      </div>
-    </div>
+    <LoadingOverlay
+      :show="loading"
+      :message="loadingMessage"
+      :progress="loadingProgress"
+    />
 
     <!-- How to Use Section -->
-    <HowToUse />
+    <HowToUse ref="templateHelpRef" />
 
     <!-- Copyright -->
     <div class="copyright">
@@ -621,17 +578,40 @@ const shouldShowCollateOption = computed(() => {
   padding: 20px;
 }
 
-h1 {
-  color: #2c5530;
+.header {
   text-align: center;
-  margin: 0 0 30px 0;
-  font-size: 2rem;
+  margin-bottom: 30px;
 }
 
-/* Three-column grid layout - equal width columns */
+h1 {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  text-align: center;
+  margin: 0 0 0 0;
+  font-size: 2rem;
+  padding: 24px 24px 16px 24px;
+  border-radius: 12px 12px 0 0;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  letter-spacing: 0.5px;
+}
+
+.subtitle {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: rgba(255, 255, 255, 0.95);
+  margin: 0;
+  padding: 0 24px 20px 24px;
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.3px;
+  border-radius: 0 0 12px 12px;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
+  font-style: italic;
+}
+
+/* Four-column grid layout - equal width columns */
 .main-content-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
   gap: 24px;
   margin-bottom: 24px;
   max-width: 1800px;
@@ -641,126 +621,183 @@ h1 {
 
 /* Section block base styling */
 .section-block {
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  padding: 20px;
+  background: white;
+  border: none;
+  border-radius: 12px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
-  min-height: 200px; /* Minimum height for all sections */
-  height: auto; /* Allow natural expansion */
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  min-height: 200px;
+  height: auto;
+  overflow: hidden;
 }
 
 .section-block h2 {
-  margin: 0 0 16px 0;
-  font-size: 16px;
-  color: #2c5530;
-  font-weight: 600;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #e8f5e8;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 700;
+  padding: 16px 20px;
+  border-bottom: none;
+  letter-spacing: 0.5px;
 }
 
 /* Files block specific */
 .files-block {
-  background: white;
-  border: 2px solid #e5e7eb;
+  border: none;
 }
 
 .files-content {
+  padding: 20px;
   display: flex;
   flex-direction: column;
   gap: 16px;
-  flex: 1; /* Allow to grow within parent */
-  min-height: 0; /* Allow children to define their own heights */
+  flex: 1;
+  min-height: 0;
+  background: white;
 }
 
-/* Config block specific - transparent to show ConfigurationSection's styling */
-.config-block {
-  background: transparent;
+/* Data Selection block specific */
+.data-selection-block {
+  background: white;
   border: none;
   padding: 0;
-  box-shadow: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Config block specific */
+.config-block {
+  background: white;
+  border: none;
+  padding: 0;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 /* Generate block specific */
 .generate-block {
-  background: white;
-  border: 2px solid #2c5530;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
   text-align: center;
   position: sticky;
   top: 20px;
   height: fit-content;
+  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+}
+
+.generate-block h2 {
+  background: transparent;
+  color: white;
+  margin: 0;
+  padding: 16px 20px;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
 }
 
 .sheet-selector-container {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  backdrop-filter: blur(10px);
   width: 100%;
 }
 
 .sheet-selector-container label {
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: #333;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: white;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 
 .sheet-selector-container select {
-  padding: 6px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 13px;
+  padding: 10px 12px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  font-size: 14px;
   background: white;
+  font-weight: 500;
+  color: #667eea;
+  cursor: pointer;
+  transition: all 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.sheet-selector-container select:hover {
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.sheet-selector-container select:focus {
+  outline: none;
+  border-color: white;
+  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
 }
 
 .csv-info {
   display: flex;
   justify-content: center;
-  margin-top: 10px;
-  padding: 8px 12px;
+  margin-top: 12px;
+  padding: 10px 14px;
 }
 
 .csv-badge {
-  font-size: 0.85rem;
-  color: #2e7d32;
-  background: rgba(46, 125, 50, 0.1);
-  padding: 6px 12px;
-  border-radius: 4px;
-  font-weight: 500;
-  border: 1px solid rgba(46, 125, 50, 0.3);
+  font-size: 0.9rem;
+  color: white;
+  background: rgba(255, 255, 255, 0.25);
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  border: 2px solid rgba(255, 255, 255, 0.4);
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .generate-btn {
-  background: #2c5530;
-  color: white;
-  padding: 12px 24px;
+  background: white;
+  color: #667eea;
+  padding: 14px 28px;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: background 0.2s;
-  width: 100%;
+  font-size: 16px;
+  font-weight: 700;
+  transition: all 0.3s;
+  width: calc(100% - 40px);
+  margin: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  letter-spacing: 0.5px;
 }
 
 .generate-btn:hover:not(:disabled) {
-  background: #1e3a21;
+  background: #f0f0f0;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 .generate-btn:disabled {
-  background: #ccc;
+  background: rgba(255, 255, 255, 0.5);
+  color: rgba(102, 126, 234, 0.5);
   cursor: not-allowed;
+  transform: none;
 }
 
+/* Validation warnings */
 .validation-warnings {
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 6px;
-  padding: 12px 15px;
+  background: linear-gradient(135deg, #fff3cd 0%, #ffe8a1 100%);
+  border: 2px solid #ffc107;
+  border-radius: 8px;
+  padding: 14px 18px;
   margin-bottom: 15px;
   text-align: left;
+  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
 }
 
 .validation-item {
@@ -776,11 +813,13 @@ h1 {
 .output {
   position: relative;
   margin: 0 auto 20px;
-  padding: 15px 40px 15px 15px;
-  border-radius: 4px;
-  border-left: 4px solid #ccc;
+  padding: 16px 48px 16px 20px;
+  border-radius: 12px;
+  border: none;
   max-width: 1800px;
   animation: slideDown 0.3s ease-out;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
+  font-weight: 500;
 }
 
 @keyframes slideDown {
@@ -796,35 +835,36 @@ h1 {
 
 .output-close {
   position: absolute;
-  top: 10px;
-  right: 10px;
-  background: none;
-  border: none;
-  font-size: 24px;
+  top: 12px;
+  right: 12px;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+  font-size: 20px;
   line-height: 1;
-  color: inherit;
+  color: white;
   cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.2s;
-  padding: 0;
-  width: 24px;
-  height: 24px;
+  opacity: 0.9;
+  transition: all 0.2s;
+  padding: 4px 8px;
+  width: auto;
+  height: auto;
 }
 
 .output-close:hover {
   opacity: 1;
+  background: rgba(255, 255, 255, 0.3);
+  transform: scale(1.1);
 }
 
 .output.success {
-  background: #e8f5e8;
-  border-left-color: #2e7d32;
-  color: #2e7d32;
+  background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
+  color: white;
 }
 
 .output.error {
-  background: #f8d7da;
-  border-left-color: #d32f2f;
-  color: #d32f2f;
+  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
+  color: white;
 }
 
 .progress-bar {
@@ -889,7 +929,7 @@ h1 {
 }
 
 .copyright a {
-  color: #2c5530;
+  color: #667eea;
   text-decoration: none;
 }
 
@@ -897,10 +937,10 @@ h1 {
   text-decoration: underline;
 }
 
-/* Tablet Layout (768px to 1200px) */
-@media (max-width: 1200px) {
+/* Tablet Layout (1200px to 1600px) - 3 columns */
+@media (max-width: 1600px) {
   .main-content-grid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     grid-template-rows: auto auto;
   }
 
@@ -909,8 +949,13 @@ h1 {
     grid-row: 1;
   }
 
-  .config-block {
+  .data-selection-block {
     grid-column: 2;
+    grid-row: 1;
+  }
+
+  .config-block {
+    grid-column: 3;
     grid-row: 1;
   }
 
@@ -922,7 +967,37 @@ h1 {
   }
 }
 
-/* Mobile Layout (below 768px) */
+/* Tablet Layout (768px to 1200px) - 2 columns */
+@media (max-width: 1200px) {
+  .main-content-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto;
+  }
+
+  .files-block {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .data-selection-block {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .config-block {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+
+  .generate-block {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    position: relative;
+    top: 0;
+  }
+}
+
+/* Mobile Layout (below 768px) - 1 column */
 @media (max-width: 768px) {
   .app-container {
     padding: 15px;
@@ -933,160 +1008,13 @@ h1 {
     gap: 16px;
   }
 
-  .section-block {
-    padding: 16px;
-  }
-
   .files-block,
+  .data-selection-block,
   .config-block,
   .generate-block {
     grid-column: 1;
     position: relative;
     top: 0;
   }
-}
-
-/* Data Selection Section - appears below Excel dropzone */
-.data-selection-section {
-  margin-top: 16px;
-  padding: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-}
-
-.data-selection-section h3 {
-  margin: 0 0 15px 0;
-  font-size: 15px;
-  color: #2c5530;
-  font-weight: 600;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #e8f5e8;
-}
-
-.selection-field {
-  margin-bottom: 20px;
-}
-
-.selection-field:last-child {
-  margin-bottom: 0;
-}
-
-.field-label {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: #333;
-  margin-bottom: 8px;
-}
-
-.radio-group {
-  background: white;
-  padding: 12px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.radio-group label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  cursor: pointer;
-  font-weight: normal;
-  margin-bottom: 0;
-}
-
-.radio-group input[type='number'] {
-  width: 80px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-#add-subtract {
-  width: 60px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.nested-controls {
-  margin-left: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.nested-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.nested-row label {
-  font-size: 14px;
-  color: #555;
-  margin: 0;
-  font-weight: 500;
-}
-
-.nested-row select {
-  flex: 1;
-  min-width: 150px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.helper-text {
-  margin-top: 6px;
-  margin-left: 0;
-  font-size: 13px;
-  color: #666;
-  font-style: italic;
-  padding: 8px 10px;
-  background: #f0f8ff;
-  border-radius: 4px;
-  border-left: 2px solid #2196f3;
-}
-
-.collate-option {
-  margin-top: 12px;
-  margin-left: 0;
-  padding: 12px;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-.collate-label {
-  display: block;
-  font-weight: 500;
-  margin-bottom: 8px;
-  color: #333;
-  font-size: 14px;
-}
-
-.radio-group-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.radio-group-inline label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: normal;
-  margin-bottom: 0;
-  font-size: 14px;
 }
 </style>
