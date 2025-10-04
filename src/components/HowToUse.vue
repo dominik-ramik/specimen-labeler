@@ -18,7 +18,7 @@
           <p class="section-text">
             The <strong>Specimen Labeler</strong> is a tool designed to
             automatically generate formatted specimen labels from your Excel
-            spreadsheet data using a Word document template. It saves time by
+            spreadsheet or CSV data using a Word document template. It saves time by
             creating multiple labels with consistent formatting, handling
             duplicates, and applying various data transformations.
           </p>
@@ -29,27 +29,33 @@
               Unlike traditional Word mail merge, this app offers powerful features specifically designed for specimen labeling:
             </p>
             <ul class="feature-list">
-              <li><strong>Intelligent Duplicate Handling</strong> — Automatically generate multiple copies of each label based on a column value or fixed number, with flexible collation options</li>
-              <li><strong>Smart Date Formatting</strong> — Convert dates to scientific formats (Roman numerals, ISO standard, etc.) with international month names support</li>
+              <li><strong>Intelligent Duplicate Handling</strong> — Automatically generate multiple copies of each label based on a column value or fixed number, with flexible collation options (collated vs. uncollated)</li>
+              <li><strong>Smart Date Formatting</strong> — Convert dates to scientific formats (Roman numerals, ISO standard, full month names) with international locale support (15+ languages)</li>
               <li><strong>Coordinate Transformation</strong> — Parse and convert geographic coordinates between formats (DMS ↔ Decimal) with automatic direction detection</li>
-              <li><strong>Browser Storage</strong> — Your files and settings are saved locally for quick reuse</li>
-              <li><strong>Flexible Record Selection</strong> — Process all records or select specific row ranges</li>
+              <li><strong>Flexible Record Selection</strong> — Process all records or select specific row ranges (e.g., rows 10-50)</li>
+              <li><strong>Browser Storage</strong> — Your files and settings are saved locally in your browser for quick reuse</li>
+              <li><strong>Multiple Labels Per Page</strong> — Automatically detects template layout (1, 2, 4, 6 labels per page, etc.)</li>
             </ul>
           </div>
 
           <h4 class="section-heading">How to use it - Step by step:</h4>
           <ol class="steps-list">
-            <li><strong>Prepare your Word template</strong> - Create a .docx file with page loop tags, numbered placeholders, and a page break (see detailed example in the Template & Spreadsheet Structure section below)</li>
-            <li><strong>Prepare your Excel spreadsheet or CSV file</strong> - Organize your specimen data in columns with clear headers that match your template placeholders</li>
-            <li><strong>Upload the Word template</strong> - Drag and drop (or click to browse) your .docx template file. It will be saved for future use</li>
-            <li><strong>Upload the Excel/CSV file</strong> - Drag and drop (or click to browse) your .xlsx or .csv data file. It will also be saved for reuse</li>
-            <li><strong>Select the sheet (Excel only)</strong> - If you uploaded an Excel file, choose which sheet contains your data from the dropdown menu. CSV files skip this step</li>
-            <li><strong>Configure options</strong> - Set up your preferences (duplicates, date formats, coordinates, etc.). Your settings are automatically saved</li>
-            <li><strong>Generate labels</strong> - Click the "Generate Labels" button. The app will process your data and download a new Word document</li>
+            <li><strong>Prepare your Word template</strong> — Create a .docx file with page loop tags <code class="inline-code">{#pages}</code>...<code class="inline-code">{/pages}</code>, numbered placeholders like <code class="inline-code">{Plant Name#1}</code>, and a page break before the closing tag (see detailed example below)</li>
+            <li><strong>Prepare your Excel spreadsheet or CSV file</strong> — Organize your specimen data in columns with clear headers that match your template placeholders exactly (case-sensitive!)</li>
+            <li><strong>Upload the Word template</strong> — Drag and drop (or click to browse) your .docx template file. It will be saved in your browser for future use</li>
+            <li><strong>Upload the Excel/CSV file</strong> — Drag and drop (or click to browse) your .xlsx or .csv data file. It will also be saved in your browser for reuse</li>
+            <li><strong>Select the sheet (Excel only)</strong> — If you uploaded an Excel file with multiple sheets, choose which sheet contains your data from the dropdown menu. CSV files skip this step automatically</li>
+            <li><strong>Configure options</strong> — Set up your preferences:
+              <ul class="sub-list">
+                <li><strong>Data Selection:</strong> Choose which records to process and how many duplicates to generate</li>
+                <li><strong>Formatting Options:</strong> Configure date formats (with locale), decimal separators, and coordinate transformations</li>
+              </ul>
+            </li>
+            <li><strong>Generate labels</strong> — Click the "Generate Labels" button. The app will process your data and download a new Word document with your formatted labels</li>
           </ol>
 
           <div class="info-box">
-            <strong>Tip:</strong> Your template and data file are saved in your browser, so they'll be ready when you return!
+            <strong>💡 Tip:</strong> Your template and data file are saved in your browser's local storage, so they'll be ready when you return! Your configuration settings are also automatically saved.
           </div>
         </div>
 
@@ -63,16 +69,28 @@
               <li>
                 <strong>Record Selection:</strong> Choose which rows from your data file to process
                 <ul class="sub-list">
-                  <li><em>All Records</em> - Process every row</li>
-                  <li><em>From Row to End</em> - Start from a specific row number</li>
-                  <li><em>From Row to Row</em> - Process only a specific range</li>
+                  <li><em>All Records</em> — Process every row in your spreadsheet</li>
+                  <li><em>From Row to End</em> — Start from a specific row number (e.g., row 10) and process all remaining rows</li>
+                  <li><em>From Row to Row</em> — Process only a specific range (e.g., rows 10 to 50)</li>
                 </ul>
               </li>
               <li>
                 <strong>Duplicates Handling:</strong> Control how many copies of each label to generate
                 <ul class="sub-list">
-                  <li><em>Get from Column</em> - Use a column value (e.g., "# Duplicates") with optional +/- adjustment</li>
-                  <li><em>Fixed Number</em> - Create the same number of copies for all records</li>
+                  <li><em>No Duplicates</em> — Generate exactly one label per record</li>
+                  <li><em>Get from Column</em> — Use a column value (e.g., "# Duplicates") to determine how many copies to make
+                    <ul class="sub-list">
+                      <li><strong>+/- Adjustment:</strong> Add or subtract from the column value (e.g., +1 to add an extra copy)</li>
+                    </ul>
+                  </li>
+                  <li><em>Fixed Number</em> — Create the same number of copies for all records (e.g., 3 copies of everything)</li>
+                </ul>
+              </li>
+              <li>
+                <strong>Collation Order:</strong> Choose how duplicates are organized (appears when duplicates are enabled)
+                <ul class="sub-list">
+                  <li><em>Collated</em> — Interleave copies: Label1, Label2, Label3, Label1, Label2, Label3... (easier for manual sorting)</li>
+                  <li><em>Uncollated</em> — Group copies together: Label1, Label1, Label1, Label2, Label2, Label2... (faster printing)</li>
                 </ul>
               </li>
             </ul>
@@ -82,42 +100,84 @@
             <h5 class="option-heading">Formatting Options</h5>
             <ul class="option-list">
               <li>
-                <strong>Date Format:</strong> Choose whether and how to format dates
+                <strong>Date Format:</strong> Choose whether and how to format dates in your labels
                 <ul class="sub-list">
-                  <li><em>No date formatting</em> - Leave all dates as-is</li>
-                  <li><em>Format date column</em> - Select a specific column to format:
+                  <li><em>No date formatting</em> — Leave all dates exactly as they appear in your spreadsheet</li>
+                  <li><em>Format date column</em> — Select a specific column to format with these options:
                     <ul class="sub-list">
-                      <li><strong>Locale:</strong> Choose language for month names (English, your browser's language, or custom)</li>
-                      <li><em>Month name Day, Year</em> - January 26, 2025 (or Janvier 26, 2025 in French)</li>
-                      <li><em>Three-letter month Day, Year</em> - Jan 26, 2025 (or janv. 26, 2025 in French)</li>
-                      <li><em>Roman numeral month</em> - 26-I-2025 (language-independent)</li>
-                      <li><em>Year Month Day</em> - 2025-01-26 (ISO standard)</li>
-                      <li><em>Three-letter month</em> - 26 JAN 2025 (or 26 JANV 2025 in French)</li>
+                      <li><strong>Locale:</strong> Choose language for month names
+                        <ul class="sub-list">
+                          <li><em>English</em> — January, February, March...</li>
+                          <li><em>Czech (Čeština)</em> — leden, únor, březen...</li>
+                          <li><em>German (Deutsch)</em> — Januar, Februar, März...</li>
+                          <li><em>Spanish (Español)</em> — enero, febrero, marzo...</li>
+                          <li><em>French (Français)</em> — janvier, février, mars...</li>
+                          <li><em>And 10 more languages!</em> — Italian, Polish, Portuguese, Russian, Chinese, Japanese, Korean, Arabic, Hindi</li>
+                        </ul>
+                      </li>
+                      <li><strong>Format styles:</strong>
+                        <ul class="sub-list">
+                          <li><em>Month name Day, Year</em> — January 26, 2025 (or Janvier 26, 2025 in French)</li>
+                          <li><em>Three-letter month Day, Year</em> — Jan 26, 2025 (or janv. 26, 2025 in French)</li>
+                          <li><em>Roman numeral month</em> — 26-I-2025 (language-independent, perfect for international use)</li>
+                          <li><em>Year Month Day</em> — 2025-01-26 (ISO standard format)</li>
+                          <li><em>Three-letter month uppercase</em> — 26 JAN 2025 (or 26 JANV 2025 in French)</li>
+                        </ul>
+                      </li>
                     </ul>
                   </li>
                 </ul>
                 <div class="note-text">
-                  Note: If a value cannot be parsed as a date, it will remain unchanged in the output. Month names adapt automatically to your selected locale.
+                  <strong>Note:</strong> If a value cannot be parsed as a date, it will remain unchanged in the output. The app handles various input formats including DD/MM/YYYY, MM/DD/YYYY, YYYY-MM-DD, and Excel serial numbers.
                 </div>
               </li>
-              <li><strong>Decimal Format:</strong> Choose decimal separator (Dot: 1.5 or Comma: 1,5)</li>
+              <li>
+                <strong>Decimal Format:</strong> Choose decimal separator for numeric values
+                <ul class="sub-list">
+                  <li><em>Dot (1.5)</em> — Standard format used in English-speaking countries</li>
+                  <li><em>Comma (1,5)</em> — Standard format used in most European countries</li>
+                </ul>
+                <div class="note-text">
+                  <strong>Note:</strong> This affects all decimal numbers in your output, including coordinates when using decimal format.
+                </div>
+              </li>
             </ul>
           </div>
 
           <div class="option-section">
             <h5 class="option-heading">Geocoordinate Transformation</h5>
+            <p class="section-text">Parse and convert geographic coordinates between different formats automatically:</p>
             <ul class="option-list">
-              <li><strong>No transformation</strong> - Leave coordinates as-is</li>
-              <li><strong>Single column</strong> - Convert "12.345 -67.890" format from one column</li>
-              <li><strong>Separate columns</strong> - Convert latitude and longitude from two columns</li>
+              <li><strong>No transformation</strong> — Leave coordinates exactly as they appear in your data</li>
+              <li><strong>Single column (lat lon in one cell)</strong> — Convert coordinate pairs like "12.345 -67.890" from one column
+                <ul class="sub-list">
+                  <li>Example input: <code class="inline-code">40.7128 -74.0060</code> (New York City coordinates)</li>
+                </ul>
+              </li>
+              <li><strong>Separate columns</strong> — Convert latitude and longitude from two different columns
+                <ul class="sub-list">
+                  <li>Example: Latitude in column "Lat" and Longitude in column "Lon"</li>
+                </ul>
+              </li>
               <li><strong>Output formats available:</strong>
                 <ul class="sub-list">
-                  <li><em>DMS</em> - Degrees Minutes Seconds (12°34'56.7"N)</li>
-                  <li><em>Decimal with Direction</em> - 12.582417N</li>
-                  <li><em>Signed Decimal</em> - 12.582417 or -12.582417</li>
+                  <li><em>Degrees Minutes Seconds (DMS)</em> — 40°42'46.3"N 74°0'21.6"W (scientific standard)</li>
+                  <li><em>Decimal with Direction</em> — 40.712778N 74.006000W (compact with direction letters)</li>
+                  <li><em>Signed Decimal</em> — 40.712778 -74.006000 (standard GIS format, negative = South/West)</li>
+                </ul>
+              </li>
+              <li><strong>Supported input formats:</strong>
+                <ul class="sub-list">
+                  <li>DMS: <code class="inline-code">40°42'46.3"N</code> or <code class="inline-code">40° 42' 46.3" N</code></li>
+                  <li>Decimal with direction: <code class="inline-code">40.712778N</code> or <code class="inline-code">40.712778 N</code></li>
+                  <li>Signed decimal: <code class="inline-code">40.712778</code> or <code class="inline-code">-74.006000</code></li>
+                  <li>Coordinate pairs: <code class="inline-code">40.712778 -74.006000</code> (space or comma separated)</li>
                 </ul>
               </li>
             </ul>
+            <div class="note-text">
+              <strong>Note:</strong> The app automatically detects coordinate formats and direction indicators (N/S/E/W). If a value cannot be parsed as a coordinate, it remains unchanged.
+            </div>
           </div>
 
           <div class="option-section">
@@ -126,15 +186,18 @@
               <li>
                 <strong>Data Files:</strong> Excel (.xlsx, .xls) and CSV (.csv, .tsv, .txt)
                 <ul class="sub-list">
-                  <li><strong>Excel files:</strong> Support multiple sheets - select the one you need after upload</li>
-                  <li><strong>CSV files:</strong> Single-sheet format - automatically ready after upload (no sheet selection needed)</li>
-                  <li>CSV delimiter detection: Comma, tab, or semicolon (automatic)</li>
-                  <li>Google Sheets: Export as .xlsx or .csv</li>
-                  <li>Office 365: Export as .xlsx or .csv</li>
-                  <li>LibreOffice/OpenOffice: Export as .xlsx or .csv</li>
+                  <li><strong>Excel files:</strong> Support multiple sheets — you'll see a dropdown to select which sheet to use after upload</li>
+                  <li><strong>CSV files:</strong> Single-sheet format — automatically ready after upload (no sheet selection needed)</li>
+                  <li><strong>CSV delimiter detection:</strong> Automatically detects comma, tab, or semicolon separators</li>
+                  <li><strong>Compatible with:</strong> Google Sheets, Office 365, LibreOffice, OpenOffice (export as .xlsx or .csv)</li>
                 </ul>
               </li>
-              <li><strong>Template Files:</strong> Microsoft Word (.docx)</li>
+              <li><strong>Template Files:</strong> Microsoft Word (.docx) only
+                <ul class="sub-list">
+                  <li>Must use .docx format (not .doc or older Word formats)</li>
+                  <li>Compatible with Word 2007 and newer, Google Docs, LibreOffice Writer</li>
+                </ul>
+              </li>
             </ul>
           </div>
         </div>

@@ -25,12 +25,13 @@ export function saveSheetName(sheetName) {
 async function parseCsvFile(file) {
   const text = await file.text()
   
-  // Let XLSX handle CSV parsing with its built-in parser
+  // Let XLSX handle CSV parsing, but keep everything as strings initially
+  // to preserve decimal commas (we'll handle number parsing in formatter.js)
   const workbook = XLSX.read(text, { 
     type: 'string',
-    raw: false, // Parse numbers and dates
+    raw: true, // 🔧 Changed to true - keep values as strings
     cellDates: false,
-    cellNF: true
+    cellNF: false // Don't try to parse number formats
   })
   
   return workbook

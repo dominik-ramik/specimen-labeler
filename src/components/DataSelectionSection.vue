@@ -154,7 +154,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
 
 const props = defineProps({
   config: {
@@ -174,6 +174,7 @@ const props = defineProps({
 const emit = defineEmits(['update:config'])
 
 const localConfig = ref(JSON.parse(JSON.stringify(props.config)))
+const isInitialized = ref(false) // 🔧 Track initialization state
 
 // Computed minimum for endRow (must be >= startRow)
 const minEndRow = computed(() => {
@@ -195,6 +196,51 @@ watch(
   },
   { deep: true }
 )
+
+// Watch for mode changes and set default endRow to totalRows
+watch(
+  () => localConfig.value.recordSelection.mode,
+  (newMode, oldMode) => {
+    if (!isInitialized.value) return // 🔧 Don't emit during initialization
+    
+    if (newMode === 'from-to-row' && oldMode !== 'from-to-row') {
+      // Set endRow to totalRows when switching to 'from-to-row' mode
+      localConfig.value.recordSelection.endRow = props.totalRows
+      emitUpdate()
+    }
+  }
+)
+
+// Watch for totalRows changes and update endRow if in from-to-row mode
+watch(
+  () => props.totalRows,
+  (newTotal) => {
+    if (newTotal > 0 && localConfig.value.recordSelection.endRow !== newTotal) {
+      localConfig.value.recordSelection.endRow = newTotal
+      
+      // Only emit if initialized
+      if (isInitialized.value) {
+        emitUpdate()
+      }
+    }
+  },
+  { immediate: true }
+)
+
+// Initialize endRow to totalRows when component mounts
+onMounted(() => {
+  nextTick(() => {
+    // Set endRow to totalRows if it's still at default value
+    if (localConfig.value.recordSelection.endRow < props.totalRows) {
+      localConfig.value.recordSelection.endRow = props.totalRows
+    }
+    
+    // Mark as initialized after a short delay
+    setTimeout(() => {
+      isInitialized.value = true
+    }, 100)
+  })
+})
 
 const handleStartRowChange = () => {
   // Validate startRow
@@ -226,6 +272,8 @@ const handleEndRowChange = () => {
 }
 
 const emitUpdate = () => {
+  if (!isInitialized.value) return // 🔧 Prevent emission during initialization
+  
   const cloned = JSON.parse(JSON.stringify(localConfig.value))
   emit('update:config', cloned)
 }

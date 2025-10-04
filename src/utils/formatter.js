@@ -238,12 +238,16 @@ function parseDecimal(value) {
   
   const str = value.toString().trim()
   
+  // 🆕 Handle European decimal comma format (e.g., "-19,5689")
+  // Replace comma with dot for parsing
+  const normalizedStr = str.replace(',', '.')
+  
   // Handle formats like: "12.345N", "12.345 N", "-12.345"
-  const decimalPattern = /^(-?\d+(?:\.\d+)?)\s*([NSEW])?$/i
-  const match = str.match(decimalPattern)
+  const decimalPattern = /^(-?\d+(?:[.,]\d+)?)\s*([NSEW])?$/i
+  const match = normalizedStr.match(decimalPattern)
   
   if (!match) {
-    const num = parseFloat(str)
+    const num = parseFloat(normalizedStr)
     return isNaN(num) ? null : num
   }
   
@@ -374,17 +378,19 @@ function isLikelyGeocoordinate(value) {
     return parseDMS(str) !== null
   }
 
-  // Check for decimal format
-  const decimal = parseFloat(str)
+  // 🆕 Normalize comma to dot for decimal check
+  const normalizedStr = str.replace(',', '.')
+  const decimal = parseFloat(normalizedStr)
   if (!isNaN(decimal) && decimal >= -180 && decimal <= 180) {
     return true
   }
 
-  // Check for lat/lon pair separated by space or comma
-  const parts = str.split(/[\s,]+/)
+  // Check for lat/lon pair separated by space, comma, or tab
+  // 🆕 Updated to handle both comma separators and tab/space
+  const parts = str.split(/[\s\t]+/).filter(p => p.trim() !== '')
   if (parts.length === 2) {
-    const lat = parseFloat(parts[0])
-    const lon = parseFloat(parts[1])
+    const lat = parseFloat(parts[0].replace(',', '.'))
+    const lon = parseFloat(parts[1].replace(',', '.'))
     return !isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
   }
 

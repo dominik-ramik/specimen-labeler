@@ -388,10 +388,10 @@ select:focus {
 }
 
 .radio-group {
-  background: #f8f9fa;
+  background: white;
   padding: 12px;
   border-radius: 4px;
-  border: 1px solid #e9ecef;
+  border: 1px solid #e2e8f0;
 }
 
 .radio-group.horizontal {

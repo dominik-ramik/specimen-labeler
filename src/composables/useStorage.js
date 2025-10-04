@@ -17,7 +17,7 @@ const configuration = ref({
   recordSelection: {
     mode: 'all',
     startRow: 1,
-    endRow: 1
+    endRow: 1000 // 🔧 Set reasonable default instead of 1
   },
   duplicates: {
     mode: 'column',
