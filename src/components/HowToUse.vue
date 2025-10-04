@@ -54,6 +54,13 @@
                 The app automatically detects the file format and processes it correctly.
               </span>
             </div>
+            <div style="margin-top: 8px; padding: 8px 12px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px;">
+              <strong>📄 CSV Files:</strong><br>
+              <span style="font-size: 0.95em;">
+                The app automatically detects CSV files (including <code>.csv</code>, <code>.tsv</code>, and <code>.txt</code> formats).
+                CSV files are parsed automatically and the single sheet is selected for you. Supports comma, tab, and semicolon delimiters.
+              </span>
+            </div>
           </li>
           <li>
             <strong>Upload the Word template</strong> - Drag and drop (or click
@@ -63,10 +70,14 @@
           <li>
             <strong>Upload the Excel/CSV file</strong> - Drag and drop (or click to
             browse) your .xlsx or .csv data file. It will also be saved for reuse.
+            <ul style="margin-top: 8px; margin-bottom: 8px">
+              <li><strong>Excel files (.xlsx, .xls):</strong> After upload, select the sheet you want to use from the dropdown</li>
+              <li><strong>CSV files (.csv, .tsv, .txt):</strong> No sheet selection needed - CSV files are automatically ready to use</li>
+            </ul>
           </li>
           <li>
-            <strong>Select the sheet</strong> - Choose which Excel sheet
-            contains your data from the dropdown menu.
+            <strong>Select the sheet (Excel only)</strong> - If you uploaded an Excel file,
+            choose which sheet contains your data from the dropdown menu. CSV files skip this step.
           </li>
           <li>
             <strong>Configure options</strong> - Set up your preferences
@@ -94,7 +105,7 @@
           <ul>
             <li>
               <strong>Record Selection:</strong> Choose which rows from your
-              Excel sheet to process
+              data file to process
               <ul>
                 <li><em>All Records</em> - Process every row</li>
                 <li>
@@ -171,12 +182,14 @@
           <h5>Supported File Formats</h5>
           <ul>
             <li>
-              <strong>Data Files:</strong> Excel (.xlsx, .xls) and CSV (.csv, .tsv)
+              <strong>Data Files:</strong> Excel (.xlsx, .xls) and CSV (.csv, .tsv, .txt)
               <ul>
-                <li>Excel files can have multiple sheets</li>
-                <li>CSV files are automatically parsed (comma, tab, or semicolon delimited)</li>
+                <li><strong>Excel files:</strong> Support multiple sheets - select the one you need after upload</li>
+                <li><strong>CSV files:</strong> Single-sheet format - automatically ready after upload (no sheet selection)</li>
+                <li>CSV delimiter detection: Comma, tab, or semicolon (automatic)</li>
                 <li>Google Sheets: Export as .xlsx or .csv</li>
                 <li>Office 365: Export as .xlsx or .csv</li>
+                <li>LibreOffice/OpenOffice: Export as .xlsx or .csv</li>
               </ul>
             </li>
             <li>
@@ -192,7 +205,10 @@
       <div class="example-grid">
         <!-- Excel Format Example -->
         <div>
-          <h4>Excel Spreadsheet Format</h4>
+          <h4>Excel/CSV Data Format</h4>
+          <p style="font-size: 0.9rem; color: #666; margin-bottom: 10px;">
+            Both Excel and CSV files use the same column structure:
+          </p>
           <table class="excel-table">
             <thead>
               <tr>
@@ -258,7 +274,7 @@
                 border-radius: 3px;
               "
             >
-              ⚠️ REQUIRED: {#pages} at start
+            {#pages}
             </div>
             <div class="template-content">
               <div class="label-item">
@@ -331,7 +347,7 @@
                 border-radius: 3px;
               "
             >
-              ⚠️ REQUIRED: {/pages} at end
+              {/pages}
             </div>
           </div>
           <div class="important-note">

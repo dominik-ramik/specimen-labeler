@@ -68,6 +68,8 @@ All features from `specimen-labeler-v-old/` have been ported:
 
 ✅ Drag-and-drop file uploads
 ✅ Excel sheet selection with auto-detection
+✅ CSV file support with automatic detection and parsing
+✅ Auto-selection of sheet for CSV files
 ✅ Column header detection
 ✅ Template storage in localStorage
 ✅ Configuration persistence

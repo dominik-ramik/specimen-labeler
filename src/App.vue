@@ -36,7 +36,7 @@ const {
 // UI State
 const loading = ref(false)
 const loadingMessage = ref('Processing...')
-const loadingProgress = ref(0) // Add progress tracking
+const loadingProgress = ref(0)
 const outputMessage = ref('');
 const outputType = ref('info');
 const showOutput = ref(false);
@@ -46,12 +46,13 @@ const isGenerating = ref(false);
 // Sheet selection
 const availableSheets = ref([]);
 const selectedSheet = ref('');
+const fileType = ref(''); // Track if it's 'excel' or 'csv'
 
 // File display
 const templateFilename = ref('');
-const templateFilesize = ref('') // Add
+const templateFilesize = ref('')
 const excelFilename = ref('');
-const excelFilesize = ref('') // Add
+const excelFilesize = ref('')
 const isTemplateSaved = ref(false);
 const isExcelSaved = ref(false);
 
@@ -83,20 +84,21 @@ const handleExcelFile = async (file) => {
   try {
     setExcelFile(file)
     excelFilename.value = file.name
-    excelFilesize.value = formatFileSize(file.size) // Add file size
+    excelFilesize.value = formatFileSize(file.size)
     isExcelSaved.value = false
 
-    showLoading('Loading Excel sheets...')
+    showLoading('Loading data file...')
     const result = await loadExcelMetadata(file)
     availableSheets.value = result.sheets
+    fileType.value = result.fileType // Store file type ('excel' or 'csv')
 
     // Save Excel to storage
     try {
       await saveExcelToStorage(file)
       isExcelSaved.value = true
-      console.log('Excel file saved to storage successfully')
+      console.log('Data file saved to storage successfully')
     } catch (error) {
-      console.warn('Failed to save Excel file to storage:', error)
+      console.warn('Failed to save data file to storage:', error)
     }
 
     // Auto-select sheet if available
@@ -108,8 +110,8 @@ const handleExcelFile = async (file) => {
     hideLoading()
   } catch (error) {
     hideLoading()
-    console.error('Error handling Excel file:', error)
-    displayOutput(`❌ Error reading Excel file: ${error.message}`, 'error')
+    console.error('Error handling data file:', error)
+    displayOutput(`❌ Error reading data file: ${error.message}`, 'error')
   }
 }
 
@@ -370,8 +372,9 @@ const formatFileSize = (bytes) => {
             >
 
               <template #extra-content>
+                <!-- Only show sheet selector for Excel files, not CSV -->
                 <div
-                  v-if="availableSheets.length > 0"
+                  v-if="availableSheets.length > 0 && fileType === 'excel'"
                   class="sheet-selector-container"
                   @click.stop
                 >
@@ -386,6 +389,15 @@ const formatFileSize = (bytes) => {
                       {{ sheet }}
                     </option>
                   </select>
+                </div>
+                
+                <!-- Show info for CSV files -->
+                <div
+                  v-if="fileType === 'csv' && excelFilename"
+                  class="csv-info"
+                  @click.stop
+                >
+                  <span class="csv-badge">📄 CSV File - Ready to use</span>
                 </div>
               </template>
             </FileDropZone>
@@ -511,6 +523,23 @@ h1 {
   border-radius: 4px;
   font-size: 13px;
   background: white;
+}
+
+.csv-info {
+  display: flex;
+  justify-content: center;
+  margin-top: 10px;
+  padding: 8px 12px;
+}
+
+.csv-badge {
+  font-size: 0.85rem;
+  color: #2e7d32;
+  background: rgba(46, 125, 50, 0.1);
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: 500;
+  border: 1px solid rgba(46, 125, 50, 0.3);
 }
 
 .options-section {
