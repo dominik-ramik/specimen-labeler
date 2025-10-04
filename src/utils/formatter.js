@@ -8,7 +8,32 @@ function isDayFirstLocale() {
   return !monthFirstLocales.some(mf => locale.startsWith(mf))
 }
 
-function formatDate(dateString, format) {
+// 🆕 Helper function to get month name in any locale
+function getMonthName(monthIndex, locale, style = 'long') {
+  // monthIndex: 0-11 (JavaScript Date month)
+  // locale: BCP 47 locale code (e.g., 'en-US', 'fr-FR', 'cs-CZ')
+  // style: 'long' (January), 'short' (Jan), 'narrow' (J)
+  
+  const date = new Date(2000, monthIndex, 1) // Use year 2000 as arbitrary reference
+  
+  try {
+    const formatter = new Intl.DateTimeFormat(locale, { month: style })
+    return formatter.format(date)
+  } catch (error) {
+    console.warn(`Failed to format month for locale ${locale}, falling back to en-US:`, error)
+    // Fallback to English if locale is invalid
+    const fallbackFormatter = new Intl.DateTimeFormat('en-US', { month: style })
+    return fallbackFormatter.format(date)
+  }
+}
+
+// 🆕 Helper function to resolve locale
+function resolveLocale(localeConfig) {
+  // localeConfig is now just the locale code (e.g., 'en-US', 'fr-FR', 'cs-CZ')
+  return localeConfig || 'en-US'
+}
+
+function formatDate(dateString, format, locale = 'en-US') {
   if (!dateString || dateString.toString().trim() === '') return dateString
 
   try {
@@ -75,26 +100,25 @@ function formatDate(dateString, format) {
     const day = date.getDate().toString().padStart(2, '0')
     const month = (date.getMonth() + 1).toString().padStart(2, '0')
     const year = date.getFullYear()
+    const monthIndex = date.getMonth()
 
-    const monthNames = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ]
-    const shortMonthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    // 🆕 Use the locale directly
+    const actualLocale = resolveLocale(locale)
+
+    // 🆕 Roman numerals remain language-independent
     const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
-    const threeLetterMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
     switch (format) {
       case 'roman':
-        return `${day}-${romanNumerals[date.getMonth()]}-${year}`
+        return `${day}-${romanNumerals[monthIndex]}-${year}`
       case 'iso':
         return `${year}-${month}-${day}`
       case 'english':
-        return `${monthNames[date.getMonth()]} ${day}, ${year}`
+        return `${getMonthName(monthIndex, actualLocale, 'long')} ${day}, ${year}`
       case 'short':
-        return `${shortMonthNames[date.getMonth()]} ${day}, ${year}`
+        return `${getMonthName(monthIndex, actualLocale, 'short')} ${day}, ${year}`
       case 'threeletter':
-        return `${day} ${threeLetterMonths[date.getMonth()]} ${year}`
+        return `${day} ${getMonthName(monthIndex, actualLocale, 'short').toUpperCase()} ${year}`
       default:
         return dateString
     }
@@ -375,25 +399,21 @@ export function applyFormatting(data, config) {
     const metadata = row.__metadata || {}
 
     Object.keys(row).forEach((key) => {
-      // Skip the metadata property itself
       if (key === '__metadata') return
       
       let value = row[key]
 
-      // Skip formatting for certain columns
       const skipColumns = ['sort #', 'CollNb', 'Initials']
       if (skipColumns.includes(key)) {
         formattedRow[key] = value
         return
       }
 
-      // Get cell metadata if available
       const cellMeta = metadata[key] || null
 
-      // Apply date formatting ONLY to the selected date column
+      // 🆕 Pass locale to formatDate (simplified - no customLocale)
       if (date.mode === 'column' && key === date.column) {
-        // Try to format, but keep original if it fails
-        const formatted = formatDate(value, date.format)
+        const formatted = formatDate(value, date.format, date.locale)
         value = formatted
       }
 

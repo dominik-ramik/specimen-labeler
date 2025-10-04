@@ -41,6 +41,33 @@
             </select>
           </div>
           
+          <!-- 🆕 Locale picker - single dropdown with major languages -->
+          <div class="nested-row" style="margin-top: 8px;">
+            <label for="date-locale">Locale:</label>
+            <select
+              id="date-locale"
+              v-model="localConfig.formatting.date.locale"
+              :disabled="localConfig.formatting.date.mode !== 'column'"
+              @change="emitUpdate"
+            >
+              <option value="en-US">English</option>
+              <option value="">──────────</option>
+              <option value="cs-CZ">Czech (Čeština)</option>
+              <option value="de-DE">German (Deutsch)</option>
+              <option value="es-ES">Spanish (Español)</option>
+              <option value="fr-FR">French (Français)</option>
+              <option value="it-IT">Italian (Italiano)</option>
+              <option value="pl-PL">Polish (Polski)</option>
+              <option value="pt-BR">Portuguese (Português)</option>
+              <option value="ru-RU">Russian (Русский)</option>
+              <option value="zh-CN">Chinese (中文)</option>
+              <option value="ja-JP">Japanese (日本語)</option>
+              <option value="ko-KR">Korean (한국어)</option>
+              <option value="ar-SA">Arabic (العربية)</option>
+              <option value="hi-IN">Hindi (हिन्दी)</option>
+            </select>
+          </div>
+          
           <div class="nested-row" style="margin-top: 8px;">
             <label for="date-format-select">Format:</label>
             <select
@@ -49,12 +76,17 @@
               :disabled="localConfig.formatting.date.mode !== 'column'"
               @change="emitUpdate"
             >
-            <option value="english">Month name Day, Year (January 26, 2025)</option>
-              <option value="short">Three-letter month Day, Year (Jan 26, 2025)</option>
-              <option value="roman">Roman numeral month (26-I-2025)</option>
-              <option value="iso">Year Month Day (2025-01-26)</option>
-              <option value="threeletter">Three-letter month (26 JAN 2025)</option>
+              <option value="english">Month name Day, Year</option>
+              <option value="short">Three-letter month Day, Year</option>
+              <option value="roman">Roman numeral month</option>
+              <option value="iso">Year Month Day</option>
+              <option value="threeletter">Three-letter month uppercase</option>
             </select>
+          </div>
+          
+          <!-- 🆕 Format example display -->
+          <div class="format-example">
+            <strong>Example:</strong> {{ formatExample }}
           </div>
           
           <div v-if="dateColumnWarning" class="warning-text">
@@ -150,6 +182,8 @@
                 {{ header }}
               </option>
             </select>
+          </div>
+          <div class="nested-row">
             <label for="geocoord-lon-column">Longitude:</label>
             <select
               id="geocoord-lon-column"
@@ -170,7 +204,7 @@
           v-if="localConfig.formatting.geocoord.mode !== 'none'" 
           class="output-format-section"
         >
-          <div class="nested-row" style="margin-top: 12px;">
+          <div class="nested-row">
             <label for="geocoord-output-format">Output Format:</label>
             <select
               id="geocoord-output-format"
@@ -211,6 +245,23 @@ const emit = defineEmits(['update:config'])
 
 const localConfig = ref(JSON.parse(JSON.stringify(props.config)))
 
+// 🆕 Helper to get effective locale
+function getEffectiveLocale() {
+  const dateConfig = localConfig.value.formatting.date
+  return dateConfig.locale || 'en-US'
+}
+
+// 🆕 Helper to get example month name
+function getExampleMonthName(locale, style = 'long') {
+  try {
+    const date = new Date(2025, 0, 26) // January 26, 2025
+    const formatter = new Intl.DateTimeFormat(locale, { month: style })
+    return formatter.format(date)
+  } catch {
+    return style === 'long' ? 'January' : 'Jan'
+  }
+}
+
 // Check if selected date column seems to contain dates
 const dateColumnWarning = computed(() => {
   if (localConfig.value.formatting.date.mode !== 'column' || !localConfig.value.formatting.date.column) {
@@ -228,6 +279,27 @@ const dateColumnWarning = computed(() => {
   return null
 })
 
+// 🆕 Computed property for format example
+const formatExample = computed(() => {
+  const format = localConfig.value.formatting.date.format
+  const locale = getEffectiveLocale()
+  
+  switch (format) {
+    case 'english':
+      return `${getExampleMonthName(locale, 'long')} 26, 2025`
+    case 'short':
+      return `${getExampleMonthName(locale, 'short')} 26, 2025`
+    case 'roman':
+      return '26-I-2025'
+    case 'iso':
+      return '2025-01-26'
+    case 'threeletter':
+      return `26 ${getExampleMonthName(locale, 'short').toUpperCase()} 2025`
+    default:
+      return ''
+  }
+})
+
 watch(
   () => props.config,
   (newConfig) => {
@@ -237,10 +309,7 @@ watch(
 )
 
 const emitUpdate = () => {
-  // Create a deep clone to ensure no reference issues
   const cloned = JSON.parse(JSON.stringify(localConfig.value))
-  console.log('[DEBUG] ConfigurationSection emitting update:', cloned)
-  // Use nextTick to ensure DOM has updated
   emit('update:config', cloned)
 }
 </script>
@@ -367,11 +436,19 @@ select:focus {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .nested-row label {
   margin: 0;
   font-size: 0.9rem;
+  min-width: 80px;
+  flex-shrink: 0;
+}
+
+.nested-row select {
+  flex: 1;
+  min-width: 0;
 }
 
 .output-format-section {
@@ -388,10 +465,12 @@ select:focus {
 
 .output-format-section .nested-row label {
   font-weight: 500;
+  min-width: 100px;
 }
 
 .output-format-section .nested-row select {
   flex: 1;
+  min-width: 0;
 }
 
 .format-help {
@@ -422,7 +501,7 @@ select:focus {
 .format-help-inline {
   margin-top: 8px;
   padding: 6px 10px;
-  background: #f8f9fa;
+  background: #f0f8ff;
   border-left: 3px solid #667eea;
   font-size: 0.75rem;
   color: #555;
@@ -517,6 +596,29 @@ select:focus {
   font-size: 13px;
   color: #856404;
   border-radius: 4px;
+}
+
+.locale-hint {
+  width: 100%;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #666;
+  font-style: italic;
+}
+
+.format-example {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: #f0f4ff;
+  border-left: 3px solid #667eea;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  color: #555;
+}
+
+.format-example strong {
+  color: #667eea;
+  margin-right: 6px;
 }
 
 @media (max-width: 1400px) {

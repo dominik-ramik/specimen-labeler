@@ -31,8 +31,7 @@ const configuration = ref({
       mode: 'none',
       column: '',
       format: 'english',
-      locale: 'en-US', // 🆕 Default to English
-      customLocale: '' // 🆕 For custom locale input
+      locale: 'en-US' // 🆕 Simplified - just the locale code
     },
     decimalFormat: 'dot',
     geocoord: {
@@ -65,15 +64,18 @@ export function useStorage() {
             mode: 'none',
             column: '',
             format: parsed.formatting.dateFormat || 'english',
-            locale: 'en-US', // 🆕 Default for migrated configs
-            customLocale: ''
+            locale: 'en-US'
           }
           delete parsed.formatting.dateFormat
         }
-        // 🆕 Add locale if missing from existing configs
-        if (parsed.formatting?.date && !parsed.formatting.date.locale) {
-          parsed.formatting.date.locale = 'en-US'
-          parsed.formatting.date.customLocale = ''
+        // 🆕 Remove legacy customLocale if it exists
+        if (parsed.formatting?.date) {
+          if (parsed.formatting.date.customLocale) {
+            delete parsed.formatting.date.customLocale
+          }
+          if (!parsed.formatting.date.locale) {
+            parsed.formatting.date.locale = 'en-US'
+          }
         }
         if (parsed.duplicates && !parsed.duplicates.collate) {
           parsed.duplicates.collate = 'collated'

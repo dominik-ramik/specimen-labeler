@@ -16,12 +16,14 @@ Perfect for herbaria, museums, research institutions, and anyone needing to gene
 ## Features
 
 ### Date Formatting
-Convert dates to various scientific formats:
-- **Month name Day, Year**: January 26, 2025
-- **Three-letter month Day, Year**: Jan 26, 2025
-- **Roman numeral month**: 26-I-2025
+Convert dates to various scientific formats with **international month names support**:
+- **Month name Day, Year**: January 26, 2025 (English) or Janvier 26, 2025 (French)
+- **Three-letter month Day, Year**: Jan 26, 2025 (English) or janv. 26, 2025 (French)
+- **Roman numeral month**: 26-I-2025 (language-independent)
 - **Year Month Day (ISO)**: 2025-01-26
-- **Three-letter month (uppercase)**: 26 JAN 2025
+- **Three-letter month (uppercase)**: 26 JAN 2025 (English) or 26 JANV 2025 (French)
+
+**Supported Locales**: English, current browser language, or any custom locale (e.g., fr-FR, de-DE, cs-CZ, pl-PL, es-ES, etc.)
 
 ### Coordinate Transformation
 - Parse and convert geographic coordinates between formats

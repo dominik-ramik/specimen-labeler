@@ -30,7 +30,7 @@
             </p>
             <ul class="feature-list">
               <li><strong>Intelligent Duplicate Handling</strong> — Automatically generate multiple copies of each label based on a column value or fixed number, with flexible collation options</li>
-              <li><strong>Smart Date Formatting</strong> — Convert dates to scientific formats (Roman numerals, ISO standard, etc.) automatically</li>
+              <li><strong>Smart Date Formatting</strong> — Convert dates to scientific formats (Roman numerals, ISO standard, etc.) with international month names support</li>
               <li><strong>Coordinate Transformation</strong> — Parse and convert geographic coordinates between formats (DMS ↔ Decimal) with automatic direction detection</li>
               <li><strong>Browser Storage</strong> — Your files and settings are saved locally for quick reuse</li>
               <li><strong>Flexible Record Selection</strong> — Process all records or select specific row ranges</li>
@@ -87,16 +87,17 @@
                   <li><em>No date formatting</em> - Leave all dates as-is</li>
                   <li><em>Format date column</em> - Select a specific column to format:
                     <ul class="sub-list">
-                      <li><em>Month name Day, Year</em> - January 26, 2025</li>
-                      <li><em>Three-letter month Day, Year</em> - Jan 26, 2025</li>
-                      <li><em>Roman numeral month</em> - 26-I-2025</li>
-                      <li><em>Year Month Day</em> - 2025-01-26</li>
-                      <li><em>Three-letter month</em> - 26 JAN 2025</li>
+                      <li><strong>Locale:</strong> Choose language for month names (English, your browser's language, or custom)</li>
+                      <li><em>Month name Day, Year</em> - January 26, 2025 (or Janvier 26, 2025 in French)</li>
+                      <li><em>Three-letter month Day, Year</em> - Jan 26, 2025 (or janv. 26, 2025 in French)</li>
+                      <li><em>Roman numeral month</em> - 26-I-2025 (language-independent)</li>
+                      <li><em>Year Month Day</em> - 2025-01-26 (ISO standard)</li>
+                      <li><em>Three-letter month</em> - 26 JAN 2025 (or 26 JANV 2025 in French)</li>
                     </ul>
                   </li>
                 </ul>
                 <div class="note-text">
-                  Note: If a value cannot be parsed as a date, it will remain unchanged in the output.
+                  Note: If a value cannot be parsed as a date, it will remain unchanged in the output. Month names adapt automatically to your selected locale.
                 </div>
               </li>
               <li><strong>Decimal Format:</strong> Choose decimal separator (Dot: 1.5 or Comma: 1,5)</li>

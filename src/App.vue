@@ -608,7 +608,7 @@ h1 {
   font-style: italic;
 }
 
-/* Four-column grid layout - equal width columns */
+/* Four-column grid layout - equal width columns, no wrapping until breakpoint */
 .main-content-grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr 1fr;
@@ -617,6 +617,7 @@ h1 {
   max-width: 1800px;
   margin-left: auto;
   margin-right: auto;
+  overflow-x: auto; /* Allow horizontal scroll if needed rather than wrapping */
 }
 
 /* Section block base styling */
@@ -631,6 +632,7 @@ h1 {
   min-height: 200px;
   height: auto;
   overflow: hidden;
+  align-self: start; /* 🔑 Prevent stretching to match tallest column */
 }
 
 .section-block h2 {
@@ -684,10 +686,8 @@ h1 {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   border: none;
   text-align: center;
-  position: sticky;
-  top: 20px;
-  height: fit-content;
   box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+  /* Removed height: fit-content to match other columns */
 }
 
 .generate-block h2 {
@@ -795,7 +795,7 @@ h1 {
   border: 2px solid #ffc107;
   border-radius: 8px;
   padding: 14px 18px;
-  margin-bottom: 15px;
+  margin: 0 20px 15px 20px;
   text-align: left;
   box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
 }
@@ -803,7 +803,8 @@ h1 {
 .validation-item {
   font-size: 0.9rem;
   color: #856404;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  line-height: 1.4;
 }
 
 .validation-item:last-child {
@@ -962,50 +963,15 @@ h1 {
   .generate-block {
     grid-column: 1 / -1;
     grid-row: 2;
-    position: relative;
-    top: 0;
   }
 }
 
-/* Tablet Layout (768px to 1200px) - 2 columns */
+/* Stack all columns vertically below 1200px */
 @media (max-width: 1200px) {
-  .main-content-grid {
-    grid-template-columns: 1fr 1fr;
-    grid-template-rows: auto auto auto;
-  }
-
-  .files-block {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .data-selection-block {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .config-block {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .generate-block {
-    grid-column: 1 / -1;
-    grid-row: 3;
-    position: relative;
-    top: 0;
-  }
-}
-
-/* Mobile Layout (below 768px) - 1 column */
-@media (max-width: 768px) {
-  .app-container {
-    padding: 15px;
-  }
-
   .main-content-grid {
     grid-template-columns: 1fr;
     gap: 16px;
+    overflow-x: visible; /* Reset overflow */
   }
 
   .files-block,
@@ -1013,8 +979,14 @@ h1 {
   .config-block,
   .generate-block {
     grid-column: 1;
-    position: relative;
-    top: 0;
+    grid-row: auto;
+  }
+}
+
+/* Mobile adjustments for very small screens */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 15px;
   }
 }
 </style>
