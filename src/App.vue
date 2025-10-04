@@ -482,12 +482,14 @@ const scrollToTemplateHelp = () => {
                 <div
                   v-if="availableSheets.length > 0 && fileType === 'excel'"
                   class="sheet-selector-container"
+                  :class="{ 'no-sheet-selected': !selectedSheet }"
                   @click.stop
                 >
                   <label for="sheet-name">Select Sheet:</label>
                   <select
                     id="sheet-name"
                     v-model="selectedSheet"
+                    :class="{ 'invalid-selection': !selectedSheet }"
                     @change="handleSheetSelection(selectedSheet)"
                   >
                     <option value="">Select a sheet...</option>
@@ -708,6 +710,7 @@ h1 {
   border-radius: 8px;
   backdrop-filter: blur(10px);
   width: 100%;
+  transition: all 0.3s ease;
 }
 
 .sheet-selector-container label {
@@ -730,6 +733,15 @@ h1 {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
+/* Orange border when no sheet selected */
+.sheet-selector-container select.invalid-selection {
+  border-color: #ff9800;
+  border-width: 3px;
+  background: #fff8e1;
+  color: #e65100;
+  font-weight: 600;
+}
+
 .sheet-selector-container select:hover {
   border-color: rgba(255, 255, 255, 0.5);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -739,6 +751,12 @@ h1 {
   outline: none;
   border-color: white;
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+/* Override focus state when invalid */
+.sheet-selector-container select.invalid-selection:focus {
+  border-color: #ff9800;
+  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.3);
 }
 
 .csv-info {
