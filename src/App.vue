@@ -59,17 +59,15 @@ const isExcelSaved = ref(false);
 // Handle template file upload
 const handleTemplateFile = async (file) => {
   try {
-    console.log('New template file uploaded:', file.name, 'Size:', file.size)
     setTemplateFile(file)
     templateFilename.value = file.name
-    templateFilesize.value = formatFileSize(file.size) // Add file size
+    templateFilesize.value = formatFileSize(file.size)
     isTemplateSaved.value = false
 
     // Save template to storage
     try {
       await saveTemplateToStorage(file)
       isTemplateSaved.value = true
-      console.log('Template saved to storage successfully')
     } catch (error) {
       console.warn('Failed to save template to storage:', error)
     }
@@ -86,17 +84,21 @@ const handleExcelFile = async (file) => {
     excelFilename.value = file.name
     excelFilesize.value = formatFileSize(file.size)
     isExcelSaved.value = false
+    
+    // Reset sheet selection when new file is uploaded
+    selectedSheet.value = ''
+    setSheetName(null) // Clear the sheet name in state
+    setHeaders([]) // Clear headers
 
     showLoading('Loading data file...')
     const result = await loadExcelMetadata(file)
     availableSheets.value = result.sheets
-    fileType.value = result.fileType // Store file type ('excel' or 'csv')
+    fileType.value = result.fileType
 
     // Save Excel to storage
     try {
       await saveExcelToStorage(file)
       isExcelSaved.value = true
-      console.log('Data file saved to storage successfully')
     } catch (error) {
       console.warn('Failed to save data file to storage:', error)
     }
@@ -136,7 +138,6 @@ const handleSheetSelection = async (sheet) => {
     }
 
     hideLoading()
-    console.log(`Loaded ${headerList.length} column headers from sheet: ${sheet}`)
   } catch (error) {
     hideLoading()
     console.error('Error loading sheet:', error)
@@ -151,39 +152,28 @@ const generateLabels = async () => {
     showLoading('Preparing to generate labels...')
     showOutput.value = false
 
-    console.log('[DEBUG] Starting label generation...')
-    console.log('[DEBUG] Template file:', templateFile.value)
-    console.log('[DEBUG] Excel file:', excelFile.value)
-    console.log('[DEBUG] Sheet name:', sheetName.value)
-    
     // Force a fresh read of the configuration right before generation
     const currentConfig = JSON.parse(JSON.stringify(configuration.value))
-    console.log('[DEBUG] Current configuration at generation time:', currentConfig)
 
     if (!isReady.value) {
       throw new Error('Please select both Excel file, Word template, and sheet')
     }
 
     // Read Excel data
-    updateProgress('Reading Excel data...')
+    updateProgress('Reading data...')
     const data = await getExcelData(excelFile.value, sheetName.value)
-    console.log('[DEBUG] Loaded data rows:', data.length)
 
     if (data.length === 0) {
       throw new Error('No data found in the Excel sheet')
     }
 
-    console.log(`Loaded ${data.length} records from Excel for processing`)
-
     // Generate labels with the fresh configuration
-    console.log('[DEBUG] Calling labelGenerator.generateLabels...')
     const result = await labelGenerator.generateLabels(
       templateFile.value,
       data,
-      currentConfig, // Use the fresh copy we just created
+      currentConfig,
       (message) => updateProgress(message)
     )
-    console.log('[DEBUG] Label generation completed:', result)
 
     // Save the file
     const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
@@ -199,13 +189,7 @@ const generateLabels = async () => {
     )
   } catch (error) {
     hideLoading()
-    console.error('[ERROR] Generation failed:', error)
-    console.error('[ERROR] Error name:', error.name)
-    console.error('[ERROR] Error message:', error.message)
-    console.error('[ERROR] Error stack:', error.stack)
-    if (error.properties) {
-      console.error('[ERROR] Error properties:', error.properties)
-    }
+    console.error('[ERROR] Generation failed:', error.message)
     
     // Handle file access errors specially
     if (error.name === 'NotReadableError' || error.message?.includes('could not be read')) {
@@ -227,15 +211,7 @@ const generateLabels = async () => {
 
 // Handle configuration updates
 const handleConfigUpdate = (newConfig) => {
-  console.log('[DEBUG] App received config update:', newConfig)
-  console.log('[DEBUG] Before update:', JSON.parse(JSON.stringify(configuration.value)))
-  
-  // Direct assignment - Vue will handle reactivity
   configuration.value = newConfig
-  
-  console.log('[DEBUG] After update:', JSON.parse(JSON.stringify(configuration.value)))
-  
-  // Force save to localStorage
   saveConfiguration(newConfig)
 }
 
@@ -248,6 +224,11 @@ const validationSummary = computed(() => {
   // Check if duplicate column is selected when mode is 'column'
   if (configuration.value.duplicates.mode === 'column' && !configuration.value.duplicates.column) {
     issues.push('⚠️ Please select a duplicates column')
+  }
+  
+  // Check if date column is selected when mode is 'column'
+  if (configuration.value.formatting.date.mode === 'column' && !configuration.value.formatting.date.column) {
+    issues.push('⚠️ Please select a date column')
   }
   
   // Check if geocoord columns are selected when mode is active
@@ -277,7 +258,6 @@ const hideLoading = () => {
 const updateProgress = (message, progress = 0) => {
   loadingMessage.value = message
   loadingProgress.value = progress
-  console.log('Progress:', message, progress ? `${progress}%` : '')
 }
 
 const displayOutput = (message, type = 'info') => {
@@ -294,31 +274,27 @@ if (watchReadyState) {
 
 // Initialize on mount
 onMounted(async () => {
-  // Load saved configuration
   loadConfiguration()
 
   // Load stored template if exists
-  const storedTemplate = loadStoredTemplate()
-  if (storedTemplate) {
-    console.log('Found stored template:', storedTemplate.name)
+  const storedTemplateData = await loadStoredTemplate()
+  if (storedTemplateData) {
     const file = useStoredTemplate()
     if (file) {
       setTemplateFile(file)
       templateFilename.value = file.name
+      templateFilesize.value = formatFileSize(file.size)
       isTemplateSaved.value = true
-      console.log('Restored template from storage:', file.name)
     }
   }
 
   // Load stored Excel file if exists
-  const storedExcel = loadStoredExcel()
-  if (storedExcel) {
-    console.log('Found stored Excel file:', storedExcel.name)
+  const storedExcelData = await loadStoredExcel()
+  if (storedExcelData) {
     const file = useStoredExcel()
     if (file) {
       try {
         await handleExcelFile(file)
-        console.log('Restored Excel file from storage:', file.name)
       } catch (error) {
         console.error('Failed to restore Excel file:', error)
       }
@@ -334,17 +310,29 @@ const formatFileSize = (bytes) => {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
 }
+
+// Add computed property for collate option visibility
+const shouldShowCollateOption = computed(() => {
+  const mode = configuration.value.duplicates.mode
+  const fixed = configuration.value.duplicates.fixed
+  const column = configuration.value.duplicates.column
+  
+  return (mode === 'fixed' && fixed > 1) || (mode === 'column' && column !== '')
+})
 </script>
 
 <template>
   <div class="app-container">
-    <div class="container">
-      <h1>🌿 Specimens Labeler</h1>
+    <h1>🌿 Specimens Labeler</h1>
 
-      <form @submit.prevent="generateLabels">
-        <!-- File Upload Section -->
-        <div class="dropzone-container">
-          <div class="field-group">
+    <form @submit.prevent="generateLabels">
+      <!-- Three-column grid layout -->
+      <div class="main-content-grid">
+        
+        <!-- Section 1: Files Block -->
+        <div class="section-block files-block">
+          <h2>📁 Upload Files</h2>
+          <div class="files-content">
             <FileDropZone
               icon="📄"
               text="Drop Word template here"
@@ -356,9 +344,7 @@ const formatFileSize = (bytes) => {
               file-type="template"
               @file-selected="handleTemplateFile"
             />
-          </div>
-
-          <div class="field-group">
+            
             <FileDropZone
               icon="📊"
               text="Drop Excel or CSV file here"
@@ -370,7 +356,6 @@ const formatFileSize = (bytes) => {
               file-type="excel"
               @file-selected="handleExcelFile"
             >
-
               <template #extra-content>
                 <!-- Only show sheet selector for Excel files, not CSV -->
                 <div
@@ -401,65 +386,206 @@ const formatFileSize = (bytes) => {
                 </div>
               </template>
             </FileDropZone>
+
+            <!-- Data Selection Section - Only shown when files are ready -->
+            <div v-if="isReady" class="data-selection-section">
+              <h3>📋 Data Selection</h3>
+              
+              <!-- Record Selection -->
+              <div class="selection-field">
+                <label class="field-label">Record Selection</label>
+                <div class="radio-group">
+                  <label>
+                    <input
+                      type="radio"
+                      value="all"
+                      v-model="configuration.recordSelection.mode"
+                    />
+                    All Records
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      value="from-to-end"
+                      v-model="configuration.recordSelection.mode"
+                    />
+                    From Row
+                    <input
+                      type="number"
+                      min="1"
+                      v-model.number="configuration.recordSelection.startRow"
+                      :disabled="configuration.recordSelection.mode !== 'from-to-end'"
+                    />
+                    to End
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      value="from-to-row"
+                      v-model="configuration.recordSelection.mode"
+                    />
+                    From Row
+                    <input
+                      type="number"
+                      min="1"
+                      v-model.number="configuration.recordSelection.startRow"
+                      :disabled="configuration.recordSelection.mode !== 'from-to-row'"
+                    />
+                    to Row
+                    <input
+                      type="number"
+                      min="1"
+                      v-model.number="configuration.recordSelection.endRow"
+                      :disabled="configuration.recordSelection.mode !== 'from-to-row'"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <!-- Duplicates Handling -->
+              <div class="selection-field">
+                <label class="field-label">How many copies of each label to generate</label>
+                <div class="radio-group">
+                  <label>
+                    <input
+                      type="radio"
+                      value="column"
+                      v-model="configuration.duplicates.mode"
+                    />
+                    Get from Column
+                  </label>
+                  
+                  <div class="nested-controls">
+                    <div class="nested-row">
+                      <label for="duplicates-column">Column:</label>
+                      <select
+                        id="duplicates-column"
+                        v-model="configuration.duplicates.column"
+                        :disabled="configuration.duplicates.mode !== 'column'"
+                      >
+                        <option value="">Select a column...</option>
+                        <option v-for="header in headers" :key="header" :value="header">
+                          {{ header }}
+                        </option>
+                      </select>
+                      <label for="add-subtract" title="Add or subtract from the column value">+/-:</label>
+                      <input
+                        id="add-subtract"
+                        type="number"
+                        v-model.number="configuration.duplicates.addSubtract"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div class="helper-text">
+                      Example: If column value is 3 and +/- is -1, you'll get 2 copies
+                    </div>
+                  </div>
+                  
+                  <label>
+                    <input
+                      type="radio"
+                      value="fixed"
+                      v-model="configuration.duplicates.mode"
+                    />
+                    Fixed Number
+                    <input
+                      type="number"
+                      min="1"
+                      v-model.number="configuration.duplicates.fixed"
+                      :disabled="configuration.duplicates.mode !== 'fixed'"
+                    />
+                  </label>
+                  
+                  <!-- Collate option -->
+                  <div 
+                    v-if="shouldShowCollateOption" 
+                    class="collate-option"
+                  >
+                    <label class="collate-label">Order:</label>
+                    <div class="radio-group-inline">
+                      <label>
+                        <input
+                          type="radio"
+                          value="collated"
+                          v-model="configuration.duplicates.collate"
+                        />
+                        Sets Together (A,B,C,A,B,C)
+                      </label>
+                      <label>
+                        <input
+                          type="radio"
+                          value="uncollated"
+                          v-model="configuration.duplicates.collate"
+                        />
+                        Duplicates Together (A,A,A,B,B,B)
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- Configuration Section -->
-        <div v-if="isReady" class="options-section visible">
+        <!-- Section 2: Configuration Block - Only show when isReady -->
+        <div v-if="isReady" class="section-block config-block">
           <ConfigurationSection 
             :config="configuration" 
             :headers="headers" 
             @update:config="handleConfigUpdate" 
           />
         </div>
-      </form>
 
-      <!-- Generate Button -->
-      <div style="text-align: center; margin: 20px 0">
-        <!-- Validation warnings -->
-        <div v-if="validationSummary" class="validation-warnings">
-          <div v-for="(issue, index) in validationSummary" :key="index" class="validation-item">
-            {{ issue }}
+        <!-- Section 3: Generate Block - Only show when isReady -->
+        <div v-if="isReady" class="section-block generate-block">
+          <h2>🚀 Generate Labels</h2>
+          
+          <!-- Validation warnings -->
+          <div v-if="validationSummary" class="validation-warnings">
+            <div v-for="(issue, index) in validationSummary" :key="index" class="validation-item">
+              {{ issue }}
+            </div>
           </div>
+          
+          <button
+            type="button"
+            class="generate-btn"
+            :disabled="!isReady || isGenerating"
+            @click="generateLabels"
+            :title="isReady ? 'Generate labels (Ctrl+Enter)' : 'Please upload files first'"
+          >
+            {{ isGenerating ? 'Processing...' : 'Generate Labels' }}
+          </button>
         </div>
-        
-        <button
-          type="button"
-          class="generate-btn"
-          :disabled="!isReady || isGenerating"
-          @click="generateLabels"
-          :title="isReady ? 'Generate labels' : 'Please upload files first'"
-        >
-          {{ isGenerating ? 'Processing...' : 'Generate Labels' }}
-        </button>
-      </div>
 
-      <!-- Output Messages -->
-      <div v-if="showOutput" class="output" :class="outputType">
-        <button class="output-close" @click="showOutput = false" aria-label="Close message">×</button>
-        <div v-html="outputMessage"></div>
       </div>
+    </form>
 
-      <!-- Loading Overlay -->
-      <div v-if="loading" class="loading-overlay">
-        <div class="loading-content">
-          <div class="spinner"></div>
-          <div class="loading-message">{{ loadingMessage }}</div>
-          <div v-if="loadingProgress > 0" class="progress-bar">
-            <div class="progress-fill" :style="{ width: `${loadingProgress}%` }"></div>
-          </div>
-          <div v-if="loadingProgress > 0" class="progress-text">{{ loadingProgress }}%</div>
+    <!-- Output Messages -->
+    <div v-if="showOutput" class="output" :class="outputType">
+      <button class="output-close" @click="showOutput = false" aria-label="Close message">×</button>
+      <div v-html="outputMessage"></div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div v-if="loading" class="loading-overlay">
+      <div class="loading-content">
+        <div class="spinner"></div>
+        <div class="loading-message">{{ loadingMessage }}</div>
+        <div v-if="loadingProgress > 0" class="progress-bar">
+          <div class="progress-fill" :style="{ width: loadingProgress + '%' }"></div>
         </div>
+        <div v-if="loadingProgress > 0" class="progress-text">{{ loadingProgress }}%</div>
       </div>
+    </div>
 
-      <!-- How to Use Section -->
-      <HowToUse />
+    <!-- How to Use Section -->
+    <HowToUse />
 
-      <!-- Copyright -->
-      <div class="copyright">
-        © 2025
-        <a href="https://dominicweb.eu" target="_blank" rel="noopener noreferrer">Dominik M. Ramík</a>
-      </div>
+    <!-- Copyright -->
+    <div class="copyright">
+      © 2025
+      <a href="https://dominicweb.eu" target="_blank" rel="noopener noreferrer">Dominik M. Ramík</a>
     </div>
   </div>
 </template>
@@ -467,19 +593,9 @@ const formatFileSize = (bytes) => {
 <style scoped>
 .app-container {
   font-family: system-ui, -apple-system, sans-serif;
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-  background: #f5f5f5;
-  line-height: 1.5;
   min-height: 100vh;
-}
-
-.container {
-  background: white;
-  padding: 30px;
-  border-radius: 8px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  background: #f5f5f5;
+  padding: 20px;
 }
 
 h1 {
@@ -489,18 +605,69 @@ h1 {
   font-size: 2rem;
 }
 
-.dropzone-container {
-  display: flex;
-  gap: 20px;
-  margin-bottom: 20px;
-  align-items: stretch;
+/* Three-column grid layout - equal width columns */
+.main-content-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
-.dropzone-container .field-group {
-  flex: 1;
+/* Section block base styling */
+.section-block {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 20px;
   display: flex;
   flex-direction: column;
-  min-height: 200px; /* Ensure minimum height for both zones */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  min-height: 200px; /* Minimum height for all sections */
+  height: auto; /* Allow natural expansion */
+}
+
+.section-block h2 {
+  margin: 0 0 16px 0;
+  font-size: 16px;
+  color: #2c5530;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e8f5e8;
+}
+
+/* Files block specific */
+.files-block {
+  background: white;
+  border: 2px solid #e5e7eb;
+}
+
+.files-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1; /* Allow to grow within parent */
+  min-height: 0; /* Allow children to define their own heights */
+}
+
+/* Config block specific - transparent to show ConfigurationSection's styling */
+.config-block {
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+}
+
+/* Generate block specific */
+.generate-block {
+  background: white;
+  border: 2px solid #2c5530;
+  text-align: center;
+  position: sticky;
+  top: 20px;
+  height: fit-content;
 }
 
 .sheet-selector-container {
@@ -542,14 +709,6 @@ h1 {
   border: 1px solid rgba(46, 125, 50, 0.3);
 }
 
-.options-section {
-  display: none;
-}
-
-.options-section.visible {
-  display: block;
-}
-
 .generate-btn {
   background: #2c5530;
   color: white;
@@ -560,6 +719,7 @@ h1 {
   font-size: 14px;
   font-weight: 500;
   transition: background 0.2s;
+  width: 100%;
 }
 
 .generate-btn:hover:not(:disabled) {
@@ -571,12 +731,32 @@ h1 {
   cursor: not-allowed;
 }
 
+.validation-warnings {
+  background: #fff3cd;
+  border: 1px solid #ffc107;
+  border-radius: 6px;
+  padding: 12px 15px;
+  margin-bottom: 15px;
+  text-align: left;
+}
+
+.validation-item {
+  font-size: 0.9rem;
+  color: #856404;
+  margin-bottom: 6px;
+}
+
+.validation-item:last-child {
+  margin-bottom: 0;
+}
+
 .output {
   position: relative;
-  margin-top: 20px;
+  margin: 20px auto;
   padding: 15px 40px 15px 15px;
   border-radius: 4px;
   border-left: 4px solid #ccc;
+  max-width: 1800px;
 }
 
 .output-close {
@@ -612,28 +792,6 @@ h1 {
   color: #d32f2f;
 }
 
-.validation-warnings {
-  background: #fff3cd;
-  border: 1px solid #ffc107;
-  border-radius: 6px;
-  padding: 12px 15px;
-  margin-bottom: 15px;
-  text-align: left;
-  max-width: 500px;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.validation-item {
-  font-size: 0.9rem;
-  color: #856404;
-  margin-bottom: 6px;
-}
-
-.validation-item:last-child {
-  margin-bottom: 0;
-}
-
 .progress-bar {
   margin-top: 15px;
   overflow: hidden;
@@ -644,9 +802,6 @@ h1 {
 }
 
 .progress-fill {
-  margin-top: 15px;
-  overflow: hidden;
-  border-radius: 4px;
   transition: width 0.3s ease;
   background: linear-gradient(90deg, #2c5530 0%, #4CAF50 100%);
   height: 100%;
@@ -660,6 +815,11 @@ h1 {
   border: 4px solid #f3f3f3;
   height: 40px;
   width: 40px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 }
 
 .loading-content {
@@ -683,19 +843,14 @@ h1 {
   position: fixed;
 }
 
-.color-swatch {
-  display: inline-block;
-  width: 20px;
-  height: 20px;
-  border-radius: 3px;
-  margin-right: 8px;
-}
-
 .copyright {
   margin-top: 30px;
   text-align: center;
   font-size: 14px;
   color: #666;
+  max-width: 1800px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .copyright a {
@@ -707,10 +862,196 @@ h1 {
   text-decoration: underline;
 }
 
-@media (max-width: 768px) {
-  .dropzone-container {
-    flex-direction: column;
-    gap: 15px;
+/* Tablet Layout (768px to 1200px) */
+@media (max-width: 1200px) {
+  .main-content-grid {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto;
   }
+
+  .files-block {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .config-block {
+    grid-column: 2;
+    grid-row: 1;
+  }
+
+  .generate-block {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    position: relative;
+    top: 0;
+  }
+}
+
+/* Mobile Layout (below 768px) */
+@media (max-width: 768px) {
+  .app-container {
+    padding: 15px;
+  }
+
+  .main-content-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .section-block {
+    padding: 16px;
+  }
+
+  .files-block,
+  .config-block,
+  .generate-block {
+    grid-column: 1;
+    position: relative;
+    top: 0;
+  }
+}
+
+/* Data Selection Section - appears below Excel dropzone */
+.data-selection-section {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+}
+
+.data-selection-section h3 {
+  margin: 0 0 15px 0;
+  font-size: 15px;
+  color: #2c5530;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #e8f5e8;
+}
+
+.selection-field {
+  margin-bottom: 20px;
+}
+
+.selection-field:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+  margin-bottom: 8px;
+}
+
+.radio-group {
+  background: white;
+  padding: 12px;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-group label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  font-weight: normal;
+  margin-bottom: 0;
+}
+
+.radio-group input[type='number'] {
+  width: 80px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+#add-subtract {
+  width: 60px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.nested-controls {
+  margin-left: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.nested-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nested-row label {
+  font-size: 14px;
+  color: #555;
+  margin: 0;
+  font-weight: 500;
+}
+
+.nested-row select {
+  flex: 1;
+  min-width: 150px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.helper-text {
+  margin-top: 6px;
+  margin-left: 0;
+  font-size: 13px;
+  color: #666;
+  font-style: italic;
+  padding: 8px 10px;
+  background: #f0f8ff;
+  border-radius: 4px;
+  border-left: 2px solid #2196f3;
+}
+
+.collate-option {
+  margin-top: 12px;
+  margin-left: 0;
+  padding: 12px;
+  background: white;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+}
+
+.collate-label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 8px;
+  color: #333;
+  font-size: 14px;
+}
+
+.radio-group-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.radio-group-inline label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: normal;
+  margin-bottom: 0;
+  font-size: 14px;
 }
 </style>

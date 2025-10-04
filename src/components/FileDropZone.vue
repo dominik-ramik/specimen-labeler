@@ -114,13 +114,14 @@ const handleFileSelect = (e) => {
   cursor: pointer;
   transition: all 0.2s;
   background: #fafafa;
-  min-height: 120px;
-  height: 100%;
+  min-height: 150px; /* Minimum height */
+  height: auto; /* Changed from 100% to auto to allow natural expansion */
   display: flex;
   flex-direction: column;
   justify-content: flex-start;
   align-items: center;
   padding-top: 20px;
+  box-sizing: border-box; /* Ensure padding is included in height calculations */
 }
 
 .drop-zone:hover,

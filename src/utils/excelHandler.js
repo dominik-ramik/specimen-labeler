@@ -32,7 +32,6 @@ export async function loadExcelMetadata(file) {
     let workbook
     
     if (isCsvFile(file)) {
-      console.log('Detected CSV file, parsing as CSV...')
       workbook = await parseCsvFile(file)
     } else {
       const arrayBuffer = await file.arrayBuffer()
@@ -130,13 +129,9 @@ export async function getExcelData(file, sheetName) {
       throw new Error('No sheet name provided')
     }
 
-    // Don't use cache for full data - always read fresh when generating
-    console.log(`Reading full data from sheet: ${sheetName}`)
-
     let workbook
     
     if (isCsvFile(file)) {
-      console.log('Parsing CSV file...')
       workbook = await parseCsvFile(file)
     } else {
       const arrayBuffer = await file.arrayBuffer()
@@ -168,7 +163,7 @@ export async function getExcelData(file, sheetName) {
 
     for (let row = range.s.r + 1; row <= range.e.r; row++) {
       const rowData = []
-      const rowMetadata = [] // Store cell metadata
+      const rowMetadata = []
       let hasData = false
 
       for (let col = range.s.c; col <= range.e.c; col++) {
@@ -183,21 +178,14 @@ export async function getExcelData(file, sheetName) {
           cellValue = XLSX.utils.format_cell(cell)
           
           // Check if cell has date format
-          // Excel date formats typically contain d, m, y characters or are numeric formats starting with 14-22
           if (cell.t === 'd') {
-            // Cell type is explicitly date
             isDate = true
           } else if (cell.t === 'n' && cell.z) {
-            // Numeric cell with format string
             const format = cell.z.toLowerCase()
-            // Common date format indicators
             const dateIndicators = ['d', 'm', 'y', 'h', 's', 'am', 'pm']
             isDate = dateIndicators.some(indicator => format.includes(indicator))
             
-            // Also check for Excel built-in date format codes
-            const dateFormatCodes = [14, 15, 16, 17, 18, 19, 20, 21, 22]
             if (cell.w && !isDate) {
-              // If formatted value looks like a date
               isDate = /\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}/.test(cell.w)
             }
           }
@@ -219,13 +207,10 @@ export async function getExcelData(file, sheetName) {
       } else {
         consecutiveEmptyRows++
         if (consecutiveEmptyRows >= maxConsecutiveEmptyRows) {
-          console.log(`Stopped reading at row ${row + 1} after ${maxConsecutiveEmptyRows} consecutive empty rows`)
           break
         }
       }
     }
-
-    console.log(`Read ${dataRows.length} data rows from Excel`)
 
     const result = dataRows
       .map((rowObj) => {
@@ -252,20 +237,10 @@ export async function getExcelData(file, sheetName) {
         // Only include rows that have at least one non-empty value
         return Object.values(row).some((value) => value && value.toString().trim() !== '')
       })
-
-    console.log(`Processed ${result.length} valid data rows`)
-    
-    // Log sample metadata for debugging
-    if (result.length > 0) {
-      console.log('[DEBUG] Sample row metadata:', result[0].__metadata)
-    }
     
     return result
   } catch (error) {
-    console.error('Error reading Excel data:', error)
+    console.error('Error reading  data:', error)
     throw new Error('Failed to read Excel data: ' + error.message)
   }
 }
-
-// Export the clearCache function as well
-export { clearCache }

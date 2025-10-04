@@ -50,8 +50,6 @@ function formatDate(dateString, format) {
     const romanNumerals = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII']
     const threeLetterMonths = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC']
 
-    console.log(`[DEBUG] Formatting date: "${dateString}" → ${day}/${month}/${year} → format: ${format}`)
-
     switch (format) {
       case 'roman':
         return `${day}-${romanNumerals[date.getMonth()]}-${year}`
@@ -334,9 +332,7 @@ function isLikelyGeocoordinate(value) {
 }
 
 export function applyFormatting(data, config) {
-  const { dateFormat, decimalFormat, geocoord } = config.formatting
-
-  console.log('[DEBUG] Applying formatting with config:', { dateFormat, decimalFormat, geocoordMode: geocoord.mode })
+  const { date, decimalFormat, geocoord } = config.formatting
 
   return data.map((row, rowIndex) => {
     const formattedRow = {}
@@ -358,22 +354,15 @@ export function applyFormatting(data, config) {
       // Get cell metadata if available
       const cellMeta = metadata[key] || null
 
-      // Log first row for debugging
-      if (rowIndex === 0) {
-        console.log(`[DEBUG] Column "${key}": value="${value}", isDate=${isLikelyDate(value, cellMeta)}, metadata=`, cellMeta)
+      // Apply date formatting ONLY to the selected date column
+      if (date.mode === 'column' && key === date.column) {
+        // Try to format, but keep original if it fails
+        const formatted = formatDate(value, date.format)
+        value = formatted
       }
 
-      // Apply date formatting (now with metadata)
-      if (isLikelyDate(value, cellMeta)) {
-        const originalValue = value
-        value = formatDate(value, dateFormat)
-        if (rowIndex === 0) {
-          console.log(`[DEBUG] Date formatted: "${originalValue}" → "${value}"`)
-        }
-      }
-
-      // Apply decimal formatting (but not to dates)
-      if (!isLikelyDate(value, cellMeta) && isLikelyDecimal(value)) {
+      // Apply decimal formatting (but not to the date column)
+      if (!(date.mode === 'column' && key === date.column) && isLikelyDecimal(value)) {
         value = formatDecimal(value, decimalFormat)
       }
 

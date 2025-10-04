@@ -1,4 +1,11 @@
 import { ref, watch } from 'vue'
+import { 
+  saveFileToIndexedDB, 
+  loadFileFromIndexedDB, 
+  indexedDBDataToFile,
+  deleteFileFromIndexedDB,
+  migrateFromLocalStorage
+} from '../utils/indexedDBStorage'
 
 const STORAGE_PREFIX = 'specimensLabeler_'
 
@@ -14,10 +21,14 @@ const configuration = ref({
     column: '',
     addSubtract: 0,
     fixed: 1,
-    collate: 'collated' // Add new collate option (default: collated)
+    collate: 'collated'
   },
   formatting: {
-    dateFormat: 'english',
+    date: {
+      mode: 'none', // 'none' or 'column'
+      column: '',
+      format: 'roman' // 'roman', 'iso', 'english', 'threeletter'
+    },
     decimalFormat: 'dot',
     geocoord: {
       mode: 'none',
@@ -31,15 +42,24 @@ const configuration = ref({
 
 // Template storage
 const storedTemplate = ref(null)
+const storedExcel = ref(null)
 
 export function useStorage() {
-  // Load configuration from localStorage
+  // Load configuration from localStorage (configuration is small, keep in LocalStorage)
   const loadConfiguration = () => {
     try {
       const saved = localStorage.getItem(`${STORAGE_PREFIX}configuration`)
       if (saved) {
         const parsed = JSON.parse(saved)
-        // Ensure collate has a default value if not present
+        // Handle legacy dateFormat
+        if (parsed.formatting && !parsed.formatting.date) {
+          parsed.formatting.date = {
+            mode: 'none',
+            column: '',
+            format: parsed.formatting.dateFormat || 'roman'
+          }
+          delete parsed.formatting.dateFormat
+        }
         if (parsed.duplicates && !parsed.duplicates.collate) {
           parsed.duplicates.collate = 'collated'
         }
@@ -54,7 +74,6 @@ export function useStorage() {
   const saveConfiguration = (config) => {
     try {
       const configToSave = config || configuration.value
-      console.log('[DEBUG] Saving configuration to localStorage:', configToSave)
       localStorage.setItem(`${STORAGE_PREFIX}configuration`, JSON.stringify(configToSave))
     } catch (error) {
       console.warn('Failed to save configuration:', error)
@@ -65,7 +84,6 @@ export function useStorage() {
   watch(
     configuration,
     (newConfig) => {
-      console.log('[DEBUG] Storage watcher triggered, saving:', JSON.parse(JSON.stringify(newConfig)))
       saveConfiguration(newConfig)
     },
     { deep: true, immediate: false, flush: 'post' }
@@ -90,39 +108,26 @@ export function useStorage() {
     }
   }
 
-  // Template storage functions
+  // Template storage functions (using IndexedDB)
   const saveTemplateToStorage = async (file) => {
     try {
-      const arrayBuffer = await file.arrayBuffer()
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      )
-
-      const templateData = {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        data: base64,
-        savedAt: new Date().toISOString()
-      }
-
-      localStorage.setItem(`${STORAGE_PREFIX}template`, JSON.stringify(templateData))
-      storedTemplate.value = templateData
-      console.log('Template saved to storage:', file.name)
+      const fileData = await saveFileToIndexedDB('template', file)
+      storedTemplate.value = fileData
+      console.log('Template saved to IndexedDB:', file.name)
     } catch (error) {
-      console.warn('Failed to save template to storage:', error)
+      console.warn('Failed to save template to IndexedDB:', error)
       throw error
     }
   }
 
-  const loadStoredTemplate = () => {
+  const loadStoredTemplate = async () => {
     try {
-      const saved = localStorage.getItem(`${STORAGE_PREFIX}template`)
-      if (saved) {
-        const templateData = JSON.parse(saved)
-        storedTemplate.value = templateData
-        return templateData
-      }
+      // Try migration from LocalStorage first
+      await migrateFromLocalStorage('template')
+      
+      const fileData = await loadFileFromIndexedDB('template')
+      storedTemplate.value = fileData
+      return fileData
     } catch (error) {
       console.warn('Failed to load stored template:', error)
     }
@@ -131,88 +136,59 @@ export function useStorage() {
 
   const useStoredTemplate = () => {
     try {
-      if (!storedTemplate.value && !loadStoredTemplate()) {
+      if (!storedTemplate.value) {
         return null
       }
 
-      const { name, type, data } = storedTemplate.value
-
-      // Convert base64 back to binary
-      const binaryString = atob(data)
-      const bytes = new Uint8Array(binaryString.length)
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i)
-      }
-
-      // Create a File object
-      const blob = new Blob([bytes], { type })
-      const file = new File([blob], name, { type })
-
-      return file
+      return indexedDBDataToFile(storedTemplate.value)
     } catch (error) {
       console.warn('Failed to use stored template:', error)
       return null
     }
   }
 
-  const clearStoredTemplate = () => {
+  const clearStoredTemplate = async () => {
     try {
-      localStorage.removeItem(`${STORAGE_PREFIX}template`)
+      await deleteFileFromIndexedDB('template')
       storedTemplate.value = null
     } catch (error) {
       console.warn('Failed to clear stored template:', error)
     }
   }
 
-  // Save Excel file to storage
+  // Excel file storage functions (using IndexedDB)
   const saveExcelToStorage = async (file) => {
     try {
-      const arrayBuffer = await file.arrayBuffer()
-      const base64 = btoa(
-        new Uint8Array(arrayBuffer).reduce(
-          (data, byte) => data + String.fromCharCode(byte),
-          ''
-        )
-      )
-      localStorage.setItem(
-        'excelFile',
-        JSON.stringify({
-          name: file.name,
-          type: file.type,
-          size: file.size,
-          data: base64
-        })
-      )
+      const fileData = await saveFileToIndexedDB('excel', file)
+      storedExcel.value = fileData
+      console.log('Excel file saved to IndexedDB:', file.name)
     } catch (error) {
-      console.error('Failed to save Excel file:', error)
+      console.error('Failed to save Excel file to IndexedDB:', error)
       throw error
     }
   }
 
-  // Load stored Excel file
-  const loadStoredExcel = () => {
+  const loadStoredExcel = async () => {
     try {
-      const stored = localStorage.getItem('excelFile')
-      if (!stored) return null
-      return JSON.parse(stored)
+      // Try migration from LocalStorage first
+      await migrateFromLocalStorage('excel')
+      
+      const fileData = await loadFileFromIndexedDB('excel')
+      storedExcel.value = fileData
+      return fileData
     } catch (error) {
       console.error('Failed to load stored Excel:', error)
       return null
     }
   }
 
-  // Convert stored Excel back to File object
   const useStoredExcel = () => {
-    const stored = loadStoredExcel()
-    if (!stored) return null
-
     try {
-      const binaryString = atob(stored.data)
-      const bytes = new Uint8Array(binaryString.length)
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i)
+      if (!storedExcel.value) {
+        return null
       }
-      return new File([bytes], stored.name, { type: stored.type })
+
+      return indexedDBDataToFile(storedExcel.value)
     } catch (error) {
       console.error('Failed to restore Excel file:', error)
       return null

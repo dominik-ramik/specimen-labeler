@@ -1,6 +1,6 @@
 # 🌿 Specimen Labeler
 
-A Vue 3 application for automatically generating formatted specimen labels from Excel/CSV data using Word document templates.
+A web application for automatically generating formatted specimen labels from Excel/CSV data using Word document templates.
 
 ## 📋 Overview
 
@@ -13,26 +13,6 @@ The Specimen Labeler streamlines the process of creating multiple specimen label
 
 Perfect for herbaria, museums, research institutions, and anyone needing to generate large batches of formatted labels.
 
-## ⚡ Quick Start
-
-### Prerequisites
-
-- Node.js (v16 or higher)
-- npm or yarn
-
-### Installation
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-```
-
 ## 🎯 How to Use
 
 ### 1. Prepare Your Word Template
@@ -41,6 +21,9 @@ Create a `.docx` file with:
 
 - **Page loop tags**: Add `{#pages}` at the very beginning and `{/pages}` at the very end
 - **Numbered placeholders**: Use format like `{Plant Name#1}`, `{Location#1}`, `{Plant Name#2}`, etc.
+  - **Important**: The text before the `#` symbol must **exactly match** your spreadsheet column names
+  - Example: If your Excel has a column "Plant Name", use `{Plant Name#1}`, `{Plant Name#2}`, etc.
+  - Column names are **case-sensitive** - match them exactly!
 - **Multiple labels per page**: Numbers (#1, #2, #3...) represent label positions on each page
 
 **Example template structure:**

@@ -1,304 +1,190 @@
 <template>
   <div class="configuration-section">
-    <h3 class="configuration-title">⚙️ Configuration Options</h3>
+    <h3 class="configuration-title">✨ Formatting Options</h3>
 
-    <!-- Add section headers for better organization -->
-    <div class="config-group">
-      <h4 class="config-group-title">📋 Data Selection</h4>
-      <div class="grid">
-        <!-- Record Selection -->
-        <div class="field-group">
-          <label>Record Selection</label>
-          <div class="radio-group">
-            <label>
-              <input
-                type="radio"
-                value="all"
-                v-model="localConfig.recordSelection.mode"
-                @change="emitUpdate"
-              />
-              All Records
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="from-to-end"
-                v-model="localConfig.recordSelection.mode"
-                @change="emitUpdate"
-              />
-              From Row to End
-              <input
-                type="number"
-                min="1"
-                v-model.number="localConfig.recordSelection.startRow"
-                :disabled="localConfig.recordSelection.mode !== 'from-to-end'"
-                @input="emitUpdate"
-              />
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="from-to-row"
-                v-model="localConfig.recordSelection.mode"
-                @change="emitUpdate"
-              />
-              From Row
-              <input
-                type="number"
-                min="1"
-                v-model.number="localConfig.recordSelection.startRow"
-                :disabled="localConfig.recordSelection.mode !== 'from-to-row'"
-                @input="emitUpdate"
-              />
-              to Row
-              <input
-                type="number"
-                min="1"
-                v-model.number="localConfig.recordSelection.endRow"
-                :disabled="localConfig.recordSelection.mode !== 'from-to-row'"
-                @input="emitUpdate"
-              />
-            </label>
-          </div>
-        </div>
-
-        <!-- Duplicates Handling -->
-        <div class="field-group">
-          <label>
-            Duplicates Handling
-            <span class="help-icon" title="Control how many copies of each label to generate">ℹ️</span>
-          </label>
-          <div class="radio-group">
-            <label>
-              <input
-                type="radio"
-                value="column"
-                v-model="localConfig.duplicates.mode"
-                @change="emitUpdate"
-              />
-              Get from Column
-            </label>
-            
-            <div class="nested-controls">
-              <div class="nested-row">
-                <label for="duplicates-column">Column:</label>
-                <select
-                  id="duplicates-column"
-                  v-model="localConfig.duplicates.column"
-                  :disabled="localConfig.duplicates.mode !== 'column'"
-                  @change="emitUpdate"
-                >
-                  <option value="">Select a column...</option>
-                  <option v-for="header in headers" :key="header" :value="header">
-                    {{ header }}
-                  </option>
-                </select>
-                <label for="add-subtract" title="Add or subtract from the column value">+/-:</label>
-                <input
-                  id="add-subtract"
-                  type="number"
-                  v-model.number="localConfig.duplicates.addSubtract"
-                  @input="emitUpdate"
-                  placeholder="0"
-                />
-              </div>
-              <div class="helper-text">
-                Example: If column value is 3 and +/- is -1, you'll get 2 copies
-              </div>
-            </div>
-            
-            <label>
-              <input
-                type="radio"
-                value="fixed"
-                v-model="localConfig.duplicates.mode"
-                @change="emitUpdate"
-              />
-              Fixed Number
-              <input
-                type="number"
-                min="1"
-                v-model.number="localConfig.duplicates.fixed"
-                :disabled="localConfig.duplicates.mode !== 'fixed'"
-                @input="emitUpdate"
-              />
-            </label>
-            
-            <!-- Collate option - shown when duplicates will be generated -->
-            <div 
-              v-if="shouldShowCollateOption" 
-              class="collate-option"
+    <!-- Date Format -->
+    <div class="field-group">
+      <label>Date Format</label>
+      <div class="radio-group">
+        <label>
+          <input
+            type="radio"
+            value="none"
+            v-model="localConfig.formatting.date.mode"
+            @change="emitUpdate"
+          />
+          No date formatting
+        </label>
+        <label>
+          <input
+            type="radio"
+            value="column"
+            v-model="localConfig.formatting.date.mode"
+            @change="emitUpdate"
+          />
+          Format date column
+        </label>
+        
+        <div v-if="localConfig.formatting.date.mode === 'column'" class="nested-controls">
+          <div class="nested-row">
+            <label for="date-column">Column:</label>
+            <select
+              id="date-column"
+              v-model="localConfig.formatting.date.column"
+              :disabled="localConfig.formatting.date.mode !== 'column'"
+              @change="emitUpdate"
             >
-              <label class="collate-label">Order:</label>
-              <div class="radio-group-inline">
-                <label>
-                  <input
-                    type="radio"
-                    value="collated"
-                    v-model="localConfig.duplicates.collate"
-                    @change="emitUpdate"
-                  />
-                  Sets Together (A,B,C,A,B,C)
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    value="uncollated"
-                    v-model="localConfig.duplicates.collate"
-                    @change="emitUpdate"
-                  />
-                  Duplicates Together (A,A,A,B,B,B)
-                </label>
-              </div>
-            </div>
+              <option value="">Select column...</option>
+              <option v-for="header in headers" :key="header" :value="header">
+                {{ header }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="nested-row" style="margin-top: 8px;">
+            <label for="date-format-select">Format:</label>
+            <select
+              id="date-format-select"
+              v-model="localConfig.formatting.date.format"
+              :disabled="localConfig.formatting.date.mode !== 'column'"
+              @change="emitUpdate"
+            >
+              <option value="roman">Roman numeral month (26-V-2025)</option>
+              <option value="iso">Year Month Day (2025-05-26)</option>
+              <option value="english">Month name Day, Year (May 26, 2025)</option>
+              <option value="threeletter">Three-letter month (26 MAY 2025)</option>
+            </select>
+          </div>
+          
+          <div v-if="dateColumnWarning" class="warning-text">
+            ⚠️ {{ dateColumnWarning }}
           </div>
         </div>
       </div>
     </div>
 
-    <div class="config-group">
-      <h4 class="config-group-title">✨ Formatting Options</h4>
-      <div class="grid">
-        <!-- Date Format -->
-        <div class="field-group">
-          <label for="date-format">Date Format</label>
-          <select id="date-format" v-model="localConfig.formatting.dateFormat" @change="emitUpdate">
-            <option value="roman">Roman numeral month (26-V-2025)</option>
-            <option value="iso">Year Month Day (2025-05-26)</option>
-            <option value="english">Month name Day, Year (May 26, 2025)</option>
-            <option value="threeletter">Three-letter month (26 MAY 2025)</option>
-          </select>
-        </div>
-
-        <!-- Decimal Format -->
-        <div class="field-group">
-          <label>Decimal Format</label>
-          <div class="radio-group horizontal">
-            <label>
-              <input
-                type="radio"
-                value="dot"
-                v-model="localConfig.formatting.decimalFormat"
-                @change="emitUpdate"
-              />
-              Dot (1.5)
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="comma"
-                v-model="localConfig.formatting.decimalFormat"
-                @change="emitUpdate"
-              />
-              Comma (1,5)
-            </label>
-          </div>
-        </div>
+    <!-- Decimal Format -->
+    <div class="field-group">
+      <label>Decimal Format</label>
+      <div class="radio-group horizontal">
+        <label>
+          <input
+            type="radio"
+            value="dot"
+            v-model="localConfig.formatting.decimalFormat"
+            @change="emitUpdate"
+          />
+          Dot (1.5)
+        </label>
+        <label>
+          <input
+            type="radio"
+            value="comma"
+            v-model="localConfig.formatting.decimalFormat"
+            @change="emitUpdate"
+          />
+          Comma (1,5)
+        </label>
       </div>
     </div>
 
     <!-- Geocoordinate Transformation -->
-    <div class="config-group">
-      <h4 class="config-group-title">🌍 Geocoordinate Transformation</h4>
-      <div class="field-group">
-        <label>Geocoordinate Transformation</label>
-        <div class="radio-group">
-          <div class="geocoord-main-row">
-            <div class="geocoord-modes">
-              <label>
-                <input
-                  type="radio"
-                  value="none"
-                  v-model="localConfig.formatting.geocoord.mode"
-                  @change="emitUpdate"
-                />
-                No transformation
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  value="single"
-                  v-model="localConfig.formatting.geocoord.mode"
-                  @change="emitUpdate"
-                />
-                Single column (lat lon in one cell)
-              </label>
-              <div class="nested-controls">
-                <div class="nested-row">
-                  <label for="geocoord-single-column">Column:</label>
-                  <select
-                    id="geocoord-single-column"
-                    v-model="localConfig.formatting.geocoord.singleColumn"
-                    :disabled="localConfig.formatting.geocoord.mode !== 'single'"
-                    @change="emitUpdate"
-                  >
-                    <option value="">Select column...</option>
-                    <option v-for="header in headers" :key="header" :value="header">
-                      {{ header }}
-                    </option>
-                  </select>
-                </div>
-              </div>
-              <label>
-                <input
-                  type="radio"
-                  value="separate"
-                  v-model="localConfig.formatting.geocoord.mode"
-                  @change="emitUpdate"
-                />
-                Separate columns
-              </label>
-              <div class="nested-controls">
-                <div class="nested-row">
-                  <label for="geocoord-lat-column">Latitude:</label>
-                  <select
-                    id="geocoord-lat-column"
-                    v-model="localConfig.formatting.geocoord.latColumn"
-                    :disabled="localConfig.formatting.geocoord.mode !== 'separate'"
-                    @change="emitUpdate"
-                  >
-                    <option value="">Select column...</option>
-                    <option v-for="header in headers" :key="header" :value="header">
-                      {{ header }}
-                    </option>
-                  </select>
-                  <label for="geocoord-lon-column">Longitude:</label>
-                  <select
-                    id="geocoord-lon-column"
-                    v-model="localConfig.formatting.geocoord.lonColumn"
-                    :disabled="localConfig.formatting.geocoord.mode !== 'separate'"
-                    @change="emitUpdate"
-                  >
-                    <option value="">Select column...</option>
-                    <option v-for="header in headers" :key="header" :value="header">
-                      {{ header }}
-                    </option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Output Format on the right -->
-            <div 
-              v-if="localConfig.formatting.geocoord.mode !== 'none'" 
-              class="format-selection-right"
+    <div class="field-group">
+      <label>Geocoordinate Transformation</label>
+      <div class="radio-group">
+        <label>
+          <input
+            type="radio"
+            value="none"
+            v-model="localConfig.formatting.geocoord.mode"
+            @change="emitUpdate"
+          />
+          No transformation
+        </label>
+        <label>
+          <input
+            type="radio"
+            value="single"
+            v-model="localConfig.formatting.geocoord.mode"
+            @change="emitUpdate"
+          />
+          Single column (lat lon in one cell)
+        </label>
+        <div class="nested-controls">
+          <div class="nested-row">
+            <label for="geocoord-single-column">Column:</label>
+            <select
+              id="geocoord-single-column"
+              v-model="localConfig.formatting.geocoord.singleColumn"
+              :disabled="localConfig.formatting.geocoord.mode !== 'single'"
+              @change="emitUpdate"
             >
-              <label for="geocoord-output-format">Output Format:</label>
-              <select
-                id="geocoord-output-format"
-                v-model="localConfig.formatting.geocoord.outputFormat"
-                @change="emitUpdate"
-              >
-                <option value="dms">Degrees Minutes Seconds (12°34'56.7"N)</option>
-                <option value="decimal-direction">Decimal with Direction (12.582417N)</option>
-                <option value="decimal-signed">Signed Decimal (12.582417 or -12.582417)</option>
-              </select>
-              
-              <div class="format-help-inline">
-                <strong>Input formats:</strong>
-                DMS (12°34'56"N), Decimal+dir (12.345N), Signed (-12.345), Pairs ("12.345 -67.890")
-              </div>
-            </div>
+              <option value="">Select column...</option>
+              <option v-for="header in headers" :key="header" :value="header">
+                {{ header }}
+              </option>
+            </select>
+          </div>
+        </div>
+        <label>
+          <input
+            type="radio"
+            value="separate"
+            v-model="localConfig.formatting.geocoord.mode"
+            @change="emitUpdate"
+          />
+          Separate columns
+        </label>
+        <div class="nested-controls">
+          <div class="nested-row">
+            <label for="geocoord-lat-column">Latitude:</label>
+            <select
+              id="geocoord-lat-column"
+              v-model="localConfig.formatting.geocoord.latColumn"
+              :disabled="localConfig.formatting.geocoord.mode !== 'separate'"
+              @change="emitUpdate"
+            >
+              <option value="">Select column...</option>
+              <option v-for="header in headers" :key="header" :value="header">
+                {{ header }}
+              </option>
+            </select>
+            <label for="geocoord-lon-column">Longitude:</label>
+            <select
+              id="geocoord-lon-column"
+              v-model="localConfig.formatting.geocoord.lonColumn"
+              :disabled="localConfig.formatting.geocoord.mode !== 'separate'"
+              @change="emitUpdate"
+            >
+              <option value="">Select column...</option>
+              <option v-for="header in headers" :key="header" :value="header">
+                {{ header }}
+              </option>
+            </select>
+          </div>
+        </div>
+        
+        <!-- Output Format below mode selection -->
+        <div 
+          v-if="localConfig.formatting.geocoord.mode !== 'none'" 
+          class="output-format-section"
+        >
+          <div class="nested-row" style="margin-top: 12px;">
+            <label for="geocoord-output-format">Output Format:</label>
+            <select
+              id="geocoord-output-format"
+              v-model="localConfig.formatting.geocoord.outputFormat"
+              @change="emitUpdate"
+            >
+              <option value="dms">Degrees Minutes Seconds (12°34'56.7"N)</option>
+              <option value="decimal-direction">Decimal with Direction (12.582417N)</option>
+              <option value="decimal-signed">Signed Decimal (12.582417 or -12.582417)</option>
+            </select>
+          </div>
+          
+          <div class="format-help-inline">
+            <strong>Input formats:</strong>
+            DMS (12°34'56"N), Decimal+dir (12.345N), Signed (-12.345), Pairs ("12.345 -67.890")
           </div>
         </div>
       </div>
@@ -324,14 +210,21 @@ const emit = defineEmits(['update:config'])
 
 const localConfig = ref(JSON.parse(JSON.stringify(props.config)))
 
-// Determine if collate option should be shown
-const shouldShowCollateOption = computed(() => {
-  const mode = localConfig.value.duplicates.mode
-  const fixed = localConfig.value.duplicates.fixed
-  const column = localConfig.value.duplicates.column
+// Check if selected date column seems to contain dates
+const dateColumnWarning = computed(() => {
+  if (localConfig.value.formatting.date.mode !== 'column' || !localConfig.value.formatting.date.column) {
+    return null
+  }
   
-  // Show if fixed mode with value > 1, or column mode with a column selected
-  return (mode === 'fixed' && fixed > 1) || (mode === 'column' && column !== '')
+  const columnName = localConfig.value.formatting.date.column.toLowerCase()
+  const dateKeywords = ['date', 'datum', 'day', 'month', 'year', 'time', 'collected', 'recorded']
+  const hasDateKeyword = dateKeywords.some(keyword => columnName.includes(keyword))
+  
+  if (!hasDateKeyword) {
+    return `Column "${localConfig.value.formatting.date.column}" may not contain dates. Values that cannot be parsed will remain unchanged.`
+  }
+  
+  return null
 })
 
 watch(
@@ -369,39 +262,21 @@ const emitUpdate = () => {
   border-bottom: 2px solid #e2e8f0;
 }
 
-.config-group {
-  margin-bottom: 25px;
-  padding: 15px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e2e8f0;
-}
-
-.config-group-title {
-  margin: 0 0 15px 0;
-  color: #2c5530;
-  font-size: 16px;
-  font-weight: 600;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #e8f5e8;
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-bottom: 20px;
-}
-
 .field-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-bottom: 20px;
+}
+
+.field-group:last-child {
+  margin-bottom: 0;
 }
 
 .field-group > label {
   font-weight: 500;
   color: #333;
+  font-size: 15px;
 }
 
 input[type='text'],
@@ -487,7 +362,7 @@ select:focus {
   font-size: 0.9rem;
 }
 
-.format-selection {
+.output-format-section {
   margin-top: 12px;
   padding: 12px;
   background: white;
@@ -495,31 +370,16 @@ select:focus {
   border: 1px solid #ddd;
 }
 
-.format-selection > label {
-  display: block;
-  margin-bottom: 8px;
+.output-format-section .nested-row {
+  margin-top: 0;
+}
+
+.output-format-section .nested-row label {
   font-weight: 500;
-  color: #333;
 }
 
-.format-selection-right {
-  flex: 0 0 375px;
-  padding: 12px;
-  background: white;
-  border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-.format-selection-right > label {
-  display: block;
-  margin-bottom: 8px;
-  font-weight: 500;
-  color: #333;
-  font-size: 0.9rem;
-}
-
-.format-selection-right select {
-  width: 100%;
+.output-format-section .nested-row select {
+  flex: 1;
 }
 
 .format-help {
@@ -562,14 +422,9 @@ select:focus {
   margin-right: 4px;
 }
 
-.geocoord-main-row {
-  display: flex;
-  gap: 20px;
-  align-items: flex-start;
-}
-
 .geocoord-modes {
   flex: 1;
+  min-width: 250px; /* Ensure minimum width before wrapping */
   display: flex;
   flex-direction: column;
 }
@@ -642,6 +497,26 @@ select:focus {
   border-left: 2px solid #2196f3;
 }
 
+.warning-text {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: #fff3cd;
+  border-left: 3px solid #ffc107;
+  font-size: 13px;
+  color: #856404;
+  border-radius: 4px;
+}
+
+@media (max-width: 1400px) {
+  .geocoord-main-row {
+    flex-direction: column;
+  }
+  
+  .format-selection-right {
+    width: 100%;
+  }
+}
+
 @media (max-width: 768px) {
   .grid {
     grid-template-columns: 1fr;
@@ -657,7 +532,6 @@ select:focus {
   }
   
   .format-selection-right {
-    flex: 1 1 auto;
     width: 100%;
   }
 }

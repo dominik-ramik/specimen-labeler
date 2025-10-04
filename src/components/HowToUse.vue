@@ -31,12 +31,26 @@
                 your document
               </li>
               <li>
+                <strong>Page break:</strong> Add a page break (Ctrl+Enter in Word) 
+                just before the <code>{/pages}</code> tag to ensure each page prints separately
+                <div style="margin-top: 6px; padding: 6px 10px; background: #fff3cd; border-left: 3px solid #ffc107; border-radius: 4px; font-size: 0.9em;">
+                  <strong>💡 Tip:</strong> In Word, press Ctrl+Enter to insert a page break, 
+                  or use Insert → Page Break from the ribbon. This ensures each set of labels 
+                  appears on its own page.
+                </div>
+              </li>
+              <li>
                 <strong>Placeholders:</strong> Use numbered placeholders like
                 <code>{Plant Name#1}</code>, <code>{Location#1}</code>,
                 <code>{Plant Name#2}</code>, etc.
+                <div style="margin-top: 6px; padding: 6px 10px; background: #e3f2fd; border-left: 3px solid #2196f3; border-radius: 4px; font-size: 0.9em;">
+                  <strong>⚠️ Important:</strong> The text before the <code>#</code> symbol must <em>exactly match</em> 
+                  your spreadsheet column names. For example, if your Excel has a column named "Plant Name", 
+                  use <code>{Plant Name#1}</code>, <code>{Plant Name#2}</code>, etc. The names are case-sensitive!
+                </div>
               </li>
               <li>
-                <strong>The numbers (#1, #2, #3...) represent label positions within a single page if you have multiple pages per sheet:</strong>
+                <strong>The numbers (#1, #2, #3...) represent label positions within a single page:</strong>
                 #1 is the first label, #2 is the second label, and so on. The template will be repeated 
                 for each page, filling in different data for each repetition. For example, if your template 
                 has 4 label positions (#1 through #4), and you have 12 records, the app will generate 3 pages.
@@ -137,14 +151,21 @@
           <h5>Formatting Options</h5>
           <ul>
             <li>
-              <strong>Date Format:</strong> Choose how dates appear in your
-              labels
+              <strong>Date Format:</strong> Choose whether and how to format dates
               <ul>
-                <li><em>Roman numeral month</em> - 26-V-2025</li>
-                <li><em>Year Month Day</em> - 2025-05-26</li>
-                <li><em>Month name Day, Year</em> - May 26, 2025</li>
-                <li><em>Three-letter month</em> - 26 MAY 2025</li>
+                <li><em>No date formatting</em> - Leave all dates as-is</li>
+                <li><em>Format date column</em> - Select a specific column to format:
+                  <ul style="margin-top: 4px;">
+                    <li><em>Roman numeral month</em> - 26-V-2025</li>
+                    <li><em>Year Month Day</em> - 2025-05-26</li>
+                    <li><em>Month name Day, Year</em> - May 26, 2025</li>
+                    <li><em>Three-letter month</em> - 26 MAY 2025</li>
+                  </ul>
+                </li>
               </ul>
+              <div style="margin-top: 6px; font-size: 0.9em; color: #666;">
+                💡 If a value cannot be parsed as a date, it will remain unchanged in the output.
+              </div>
             </li>
             <li>
               <strong>Decimal Format:</strong> Choose decimal separator (Dot:
@@ -262,6 +283,11 @@
         <!-- Word Template Example -->
         <div>
           <h4>Word Template Format</h4>
+          <div style="margin-bottom: 10px; padding: 8px 12px; background: #e3f2fd; border-left: 3px solid #2196f3; border-radius: 4px; font-size: 0.85em;">
+            <strong>💡 Column Name Mapping:</strong> Notice how placeholder names match the Excel column headers exactly!
+            <br>Excel: <code>"Plant Name"</code> → Template: <code>{Plant Name#1}</code>
+            <br>Excel: <code>"Date Collected"</code> → Template: <code>{Date Collected#1}</code>
+          </div>
           <div class="word-template">
             <div
               style="
@@ -339,6 +365,21 @@
             <div
               style="
                 margin-top: 10px;
+                padding: 6px 8px;
+                background: #e3f2fd;
+                border: 1px dashed #2196f3;
+                border-radius: 3px;
+                text-align: center;
+                font-size: 11px;
+                color: #1976d2;
+                font-weight: 600;
+              "
+            >
+              ⏎ Page Break (Ctrl+Enter)
+            </div>
+            <div
+              style="
+                margin-top: 10px;
                 color: #d32f2f;
                 font-size: 11px;
                 font-weight: 600;
@@ -353,7 +394,8 @@
           <div class="important-note">
             <strong>⚠️ Important:</strong> The <code>{#pages}</code> and
             <code>{/pages}</code> tags tell the app where to repeat the page
-            content. Without them, only one page will be generated!
+            content. The page break before <code>{/pages}</code> ensures each 
+            page prints separately. Without the page break, all labels will run together!
           </div>
         </div>
       </div>
