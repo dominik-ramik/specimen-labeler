@@ -45,6 +45,16 @@ Parse and convert geographic coordinates between formats automatically:
 - Start from a specific row to the end (e.g., skip headers or process from row 10)
 - Process a specific row range (e.g., rows 25-100)
 
+### 🔢 Data Sorting
+- **Smart sorting**: Automatically detects data type (numbers, dates, or text) for intelligent sorting
+- **Flexible ordering**: Sort by any column in ascending or descending order
+- **Processing pipeline**: Sorting is applied after record selection and before label generation
+- **Type-aware sorting**:
+  - Numbers sorted numerically (1, 2, 10, 20... not 1, 10, 2, 20)
+  - Dates sorted chronologically
+  - Text sorted alphabetically (case-insensitive)
+  - Null/empty values automatically placed at the end
+
 ### 💾 Browser Storage
 - Files stored locally in IndexedDB for quick reuse
 - Configuration settings automatically saved in localStorage
@@ -145,6 +155,12 @@ Organize your specimen data in a spreadsheet:
 
 #### Data Selection
 - **Record Selection**: Choose which rows to process (all, from row X, or rows X-Y)
+- **Data Sorting**: Sort your data by any column before generating labels
+  - Enable sorting with a checkbox
+  - Select the column to sort by (e.g., "Collector Number", "Date Collected", "Plant Name")
+  - Choose ascending (A→Z, 1→9, oldest→newest) or descending (Z→A, 9→1, newest→oldest) order
+  - Smart sorting automatically detects whether values are numbers, dates, or text
+  - Example: Sort by "Date Collected" in descending order to get most recent specimens first
 - **Duplicates**: Set up duplication (none, column-based, or fixed number)
 - **Collation**: Choose collated (interleaved) or uncollated (grouped) order
 
