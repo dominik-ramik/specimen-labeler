@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, nextTick } from 'vue'
+import packageJson from '../package.json'
 import FileDropZone from './components/FileDropZone.vue'
 import ConfigurationSection from './components/ConfigurationSection.vue'
 import DataSelectionSection from './components/DataSelectionSection.vue'
@@ -434,7 +435,6 @@ const scrollToTemplateHelp = () => {
   <div class="app-container">
     <div class="header">
       <h1>🌿 Specimens Labeler</h1>
-      <p class="subtitle">Streamline your specimen labeling</p>
     </div>
 
     <!-- Output Messages -->
@@ -568,6 +568,7 @@ const scrollToTemplateHelp = () => {
     <div class="copyright">
       © 2025
       <a href="https://dominicweb.eu" target="_blank" rel="noopener noreferrer">Dominik M. Ramík</a>
+      <span class="version">v{{ packageJson.version }}</span>
     </div>
   </div>
 </template>
@@ -954,6 +955,13 @@ h1 {
 
 .copyright a:hover {
   text-decoration: underline;
+}
+
+.copyright .version {
+  margin-left: 8px;
+  color: #999;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* Tablet Layout (1200px to 1600px) - 3 columns */
