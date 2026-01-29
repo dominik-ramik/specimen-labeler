@@ -2,6 +2,7 @@ import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
 import { saveAs } from 'file-saver'
 import { applyFormatting } from '../utils/formatter'
+import { applySorting } from '../utils/processor'
 import { VALIDATION_LIMITS, PROGRESS_UPDATE } from '../utils/constants'
 
 export class LabelGenerator {
@@ -214,6 +215,12 @@ export class LabelGenerator {
 
       // Apply record selection
       let processedData = this.applyRecordSelection(data, config)
+
+      // Apply sorting (after record selection, before formatting)
+      if (config.sorting && config.sorting.enabled) {
+        progressCallback?.('Sorting data...')
+        processedData = applySorting(processedData, config)
+      }
 
       // Apply filters
       if (config.filters && config.filters.length > 0) {

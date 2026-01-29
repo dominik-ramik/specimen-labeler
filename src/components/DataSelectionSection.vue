@@ -62,6 +62,49 @@
       </div>
     </div>
 
+    <!-- Sorting -->
+    <div class="selection-field">
+      <label class="field-label">Data Sorting</label>
+      <div class="radio-group">
+        <label class="checkbox-label">
+          <input
+            type="checkbox"
+            v-model="localConfig.sorting.enabled"
+            @change="emitUpdate"
+          />
+          Enable sorting
+        </label>
+        
+        <div v-if="localConfig.sorting.enabled" class="nested-controls">
+          <div class="nested-row">
+            <label for="sort-column">Sort by:</label>
+            <select
+              id="sort-column"
+              v-model="localConfig.sorting.column"
+              @change="emitUpdate"
+            >
+              <option value="">Select a column...</option>
+              <option v-for="header in headers" :key="header" :value="header">
+                {{ header }}
+              </option>
+            </select>
+            <label for="sort-direction">Order:</label>
+            <select
+              id="sort-direction"
+              v-model="localConfig.sorting.direction"
+              @change="emitUpdate"
+            >
+              <option value="asc">Ascending (A→Z, 1→9)</option>
+              <option value="desc">Descending (Z→A, 9→1)</option>
+            </select>
+          </div>
+          <div class="helper-text">
+            Data will be sorted before generating labels. Sorting is smart: numbers are sorted numerically, dates chronologically, and text alphabetically.
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Duplicates Handling -->
     <div class="selection-field">
       <label class="field-label">How many copies of each label to generate</label>
@@ -343,6 +386,18 @@ const emitUpdate = () => {
   cursor: pointer;
   width: 16px;
   height: 16px;
+}
+
+.radio-group input[type='checkbox'] {
+  accent-color: #667eea;
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
+
+.checkbox-label {
+  font-weight: 500 !important;
+  color: #333;
 }
 
 .radio-group input[type='number'] {

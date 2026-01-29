@@ -19,6 +19,11 @@ const configuration = ref({
     startRow: 1,
     endRow: 1000 // 🔧 Set reasonable default instead of 1
   },
+  sorting: {
+    enabled: false,
+    column: '',
+    direction: 'asc' // 'asc' or 'desc'
+  },
   duplicates: {
     mode: 'column',
     column: '',
@@ -79,6 +84,14 @@ export function useStorage() {
         }
         if (parsed.duplicates && !parsed.duplicates.collate) {
           parsed.duplicates.collate = 'collated'
+        }
+        // 🆕 Add default sorting config if not present
+        if (!parsed.sorting) {
+          parsed.sorting = {
+            enabled: false,
+            column: '',
+            direction: 'asc'
+          }
         }
         configuration.value = { ...configuration.value, ...parsed }
       }

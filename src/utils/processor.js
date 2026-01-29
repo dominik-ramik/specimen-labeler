@@ -13,6 +13,59 @@ export function applyRecordSelection(data, config) {
   }
 }
 
+export function applySorting(data, config) {
+  if (!config.sorting || !config.sorting.enabled || !config.sorting.column) {
+    return data
+  }
+
+  const { column, direction } = config.sorting
+  
+  // Create a copy to avoid mutating original data
+  const sortedData = [...data]
+  
+  sortedData.sort((a, b) => {
+    let aVal = a[column]
+    let bVal = b[column]
+    
+    // Handle null/undefined values - put them at the end
+    if (aVal === null || aVal === undefined || aVal === '') {
+      return 1
+    }
+    if (bVal === null || bVal === undefined || bVal === '') {
+      return -1
+    }
+    
+    // Try to detect the type and sort accordingly
+    const aNum = Number(aVal)
+    const bNum = Number(bVal)
+    
+    // If both are valid numbers, sort numerically
+    if (!isNaN(aNum) && !isNaN(bNum)) {
+      return direction === 'asc' ? aNum - bNum : bNum - aNum
+    }
+    
+    // Try to parse as dates
+    const aDate = new Date(aVal)
+    const bDate = new Date(bVal)
+    
+    if (aDate instanceof Date && !isNaN(aDate) && bDate instanceof Date && !isNaN(bDate)) {
+      return direction === 'asc' ? aDate - bDate : bDate - aDate
+    }
+    
+    // Default to string comparison (case-insensitive)
+    const aStr = String(aVal).toLowerCase()
+    const bStr = String(bVal).toLowerCase()
+    
+    if (direction === 'asc') {
+      return aStr < bStr ? -1 : aStr > bStr ? 1 : 0
+    } else {
+      return aStr > bStr ? -1 : aStr < bStr ? 1 : 0
+    }
+  })
+  
+  return sortedData
+}
+
 export async function applyDuplicatesHandling(data, config) {
   const { mode, column, addSubtract, fixed } = config.duplicates
   const result = []
