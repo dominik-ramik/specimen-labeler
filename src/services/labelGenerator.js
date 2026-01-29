@@ -1,10 +1,443 @@
 import PizZip from 'pizzip'
 import Docxtemplater from 'docxtemplater'
+import expressionParser from 'docxtemplater/expressions.js'
 import { saveAs } from 'file-saver'
 import { applyFormatting } from '../utils/formatter'
 import { VALIDATION_LIMITS, PROGRESS_UPDATE } from '../utils/constants'
 
 export class LabelGenerator {
+  /**
+   * Preprocess the template XML to transform simple placeholders into indexed array syntax.
+   * 
+   * @param {string} xmlContent - The raw word/document.xml content
+   * @param {string[]} headers - Column headers from the data (to distinguish column names from loop tags)
+   * @returns {{ processedXml: string, itemsPerPage: number }}
+   */
+  preprocessTemplate(xmlContent, headers = []) {
+    // Create a Set of headers for fast lookup
+    const headerSet = new Set(headers)
+    
+    // Step 1: Defragment placeholders that Word split across multiple <w:t> tags
+    let processedXml = this.defragmentPlaceholders(xmlContent)
+    
+    // Extract the full text to find all placeholders and count {:next} tags
+    const textContent = this.extractTextFromXml(processedXml)
+    console.log('[PREPROCESS] Extracted text content:', textContent.substring(0, 500))
+    
+    // Count {:next} tags to determine items per page
+    const nextMatches = textContent.match(/\{:next\}/g) || []
+    const itemsPerPage = nextMatches.length + 1
+    
+    console.log(`[PREPROCESS] Found ${nextMatches.length} {:next} tags, so ${itemsPerPage} items per page`)
+    
+    // Step 2: Calculate cursor positions based on {:next} tags
+    const cursorPositions = this.calculateCursorPositions(processedXml)
+    
+    // Step 3: Replace placeholders with indexed versions based on cursor position
+    processedXml = this.replaceAllPlaceholders(processedXml, cursorPositions, headerSet)
+    
+    // Step 4: Remove {:next} tags
+    processedXml = processedXml.replace(/\{:next\}/g, '')
+    
+    console.log(`[PREPROCESS] Detected ${itemsPerPage} items per page (maxCursor: ${nextMatches.length})`)
+    
+    return { processedXml, itemsPerPage }
+  }
+
+  /**
+   * Defragment placeholders that Word has split across multiple <w:t> tags.
+   * 
+   * Word often splits text like {Species epithet} into:
+   * <w:t>{Species </w:t></w:r><w:r><w:t>epithet}</w:t>
+   * 
+   * This method merges such fragments back together within runs.
+   */
+  defragmentPlaceholders(xmlContent) {
+    // Strategy: Find runs (<w:r>) that contain partial placeholders and merge their text
+    // We'll process paragraph by paragraph
+    
+    const paragraphPattern = /<w:p\b[^>]*>[\s\S]*?<\/w:p>/g
+    
+    return xmlContent.replace(paragraphPattern, (paragraph) => {
+      // Check if this paragraph might have fragmented placeholders
+      if (!paragraph.includes('{') && !paragraph.includes('}')) {
+        return paragraph
+      }
+      
+      // Extract all text content to check for placeholders
+      let fullText = ''
+      const textMatches = paragraph.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || []
+      textMatches.forEach(match => {
+        const textMatch = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/)
+        if (textMatch) {
+          fullText += textMatch[1]
+        }
+      })
+      
+      // If no placeholders in full text, return as-is
+      if (!fullText.includes('{')) {
+        return paragraph
+      }
+      
+      // Check if we have fragmented placeholders (unmatched braces in individual <w:t> tags)
+      let hasFragmentation = false
+      let braceCount = 0
+      for (const match of textMatches) {
+        const textMatch = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/)
+        if (textMatch) {
+          const text = textMatch[1]
+          const openBraces = (text.match(/\{/g) || []).length
+          const closeBraces = (text.match(/\}/g) || []).length
+          braceCount += openBraces - closeBraces
+          
+          // If we have an open brace without matching close in same segment, it's fragmented
+          if (braceCount !== 0) {
+            hasFragmentation = true
+            break
+          }
+        }
+      }
+      
+      // If no fragmentation detected, return as-is
+      if (!hasFragmentation) {
+        return paragraph
+      }
+      
+      // We have fragmentation - use a simpler approach: just merge text within <w:t> tags
+      // without restructuring the entire paragraph
+      return this.mergeFragmentedPlaceholders(paragraph)
+    })
+  }
+
+  /**
+   * Merge fragmented placeholders by combining adjacent <w:t> tag contents
+   * This is a simpler approach that doesn't restructure the paragraph
+   */
+  mergeFragmentedPlaceholders(paragraph) {
+    // Find all <w:t> tags and their positions
+    const wtPattern = /<w:t([^>]*)>([^<]*)<\/w:t>/g
+    const segments = []
+    let match
+    
+    while ((match = wtPattern.exec(paragraph)) !== null) {
+      segments.push({
+        fullMatch: match[0],
+        attributes: match[1],
+        text: match[2],
+        start: match.index,
+        end: match.index + match[0].length
+      })
+    }
+    
+    if (segments.length === 0) {
+      return paragraph
+    }
+    
+    // Find segments that need merging (contain unbalanced braces)
+    let result = paragraph
+    let offset = 0
+    
+    let i = 0
+    while (i < segments.length) {
+      const seg = segments[i]
+      let combinedText = seg.text
+      let braceCount = (combinedText.match(/\{/g) || []).length - (combinedText.match(/\}/g) || []).length
+      
+      // If balanced, skip
+      if (braceCount === 0) {
+        i++
+        continue
+      }
+      
+      // Need to merge with following segments until balanced
+      let j = i + 1
+      let lastSegmentEnd = seg.end
+      
+      while (braceCount !== 0 && j < segments.length) {
+        combinedText += segments[j].text
+        braceCount = (combinedText.match(/\{/g) || []).length - (combinedText.match(/\}/g) || []).length
+        lastSegmentEnd = segments[j].end
+        j++
+      }
+      
+      // If we merged segments, replace them in the result
+      if (j > i + 1) {
+        const startPos = seg.start + offset
+        const endPos = lastSegmentEnd + offset
+        const originalLength = lastSegmentEnd - seg.start
+        
+        // Create new <w:t> tag with combined text, preserving first segment's attributes
+        const newTag = `<w:t${seg.attributes}>${combinedText}</w:t>`
+        
+        // Replace the range from first segment start to last segment end
+        result = result.substring(0, startPos) + newTag + result.substring(endPos)
+        
+        // Update offset for subsequent replacements
+        offset += newTag.length - originalLength
+      }
+      
+      i = j
+    }
+    
+    return result
+  }
+
+  /**
+   * Rebuild a paragraph by merging text from adjacent runs that contain placeholder fragments
+   * @deprecated Use mergeFragmentedPlaceholders instead - this method has issues with XML structure
+   */
+  rebuildParagraphMergingText(paragraph) {
+    // This method is kept for reference but should not be used
+    // Use mergeFragmentedPlaceholders instead
+    return this.mergeFragmentedPlaceholders(paragraph)
+  }
+
+  /**
+   * Escape XML special characters - only the essential ones for text content
+   */
+  escapeXml(text) {
+    return text
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+  }
+
+  /**
+   * Calculate cursor positions throughout the document by finding {:next} tags
+   * Returns a map of character positions to cursor values
+   */
+  calculateCursorPositions(xmlContent) {
+    const positions = []
+    let cursor = 0
+    let searchStart = 0
+    
+    // Find all {:next} tags and record their positions
+    while (true) {
+      const nextIndex = xmlContent.indexOf('{:next}', searchStart)
+      if (nextIndex === -1) break
+      
+      positions.push({ position: nextIndex, cursorAfter: cursor + 1 })
+      cursor++
+      searchStart = nextIndex + 7 // length of '{:next}'
+    }
+    
+    return positions
+  }
+
+  /**
+   * Get the cursor value at a given position in the XML
+   */
+  getCursorAtPosition(position, cursorPositions) {
+    let cursor = 0
+    for (const cp of cursorPositions) {
+      if (position > cp.position) {
+        cursor = cp.cursorAfter
+      } else {
+        break
+      }
+    }
+    return cursor
+  }
+
+  /**
+   * Replace all placeholders in the XML with indexed versions
+   * This works directly on <w:t> tag contents to preserve formatting
+   */
+  replaceAllPlaceholders(xmlContent, cursorPositions, headerSet) {
+    // Match <w:t> tags and their content
+    const wtPattern = /<w:t([^>]*)>([^<]*)<\/w:t>/g
+    
+    return xmlContent.replace(wtPattern, (match, attributes, textContent, offset) => {
+      // Check if this text contains any placeholders
+      if (!textContent.includes('{')) {
+        return match
+      }
+      
+      // Get cursor value at this position
+      const cursor = this.getCursorAtPosition(offset, cursorPositions)
+      
+      // Replace placeholders in this text segment
+      // Match placeholders but not {:next} or loop tags
+      const placeholderPattern = /\{([^}:][^}]*)\}/g
+      const processedText = textContent.replace(placeholderPattern, (placeholder, tagContent) => {
+        const trimmedTag = tagContent.trim()
+        
+        // Skip {:next} tags - they'll be removed later
+        if (trimmedTag === ':next') {
+          return placeholder
+        }
+        
+        // Check if this is a known column header
+        const isKnownColumn = headerSet.has(trimmedTag)
+        
+        // Skip loop tags and special docxtemplater syntax UNLESS it's a known column
+        if (!isKnownColumn) {
+          if (trimmedTag.startsWith('#') || trimmedTag.startsWith('/') || 
+              trimmedTag === 'pages' || trimmedTag.startsWith('@') || 
+              trimmedTag.startsWith('.') || trimmedTag.startsWith(':')) {
+            return placeholder
+          }
+        }
+        
+        // Transform to indexed array syntax using bracket notation
+        // This handles column names with spaces and special characters
+        const escapedTag = trimmedTag.replace(/\\/g, '\\\\').replace(/'/g, "\\'")
+        return `{items[${cursor}]['${escapedTag}']}`
+      })
+      
+      return `<w:t${attributes}>${processedText}</w:t>`
+    })
+  }
+
+  /**
+   * Extract plain text from XML content
+   */
+  extractTextFromXml(xmlContent) {
+    let text = ''
+    const textMatches = xmlContent.match(/<w:t[^>]*>([^<]*)<\/w:t>/g) || []
+    textMatches.forEach(match => {
+      const textMatch = match.match(/<w:t[^>]*>([^<]*)<\/w:t>/)
+      if (textMatch) {
+        text += textMatch[1]
+      }
+    })
+    return text
+  }
+
+  /**
+   * Wrap the document body content with pages loop and ensure page break.
+   * Handles both simple documents and table-based templates.
+   * @param {string} xmlContent - The document XML
+   * @returns {string} - Modified XML with pages loop
+   */
+  wrapWithPagesLoop(xmlContent) {
+    // Check if pages loop already exists
+    if (xmlContent.includes('{#pages}') && xmlContent.includes('{/pages}')) {
+      console.log('[PREPROCESS] Pages loop already exists in template')
+      return xmlContent
+    }
+    
+    // Find the document body
+    const bodyStartMatch = xmlContent.match(/<w:body>/)
+    const bodyEndMatch = xmlContent.match(/<\/w:body>/)
+    
+    if (!bodyStartMatch || !bodyEndMatch) {
+      console.warn('[PREPROCESS] Could not find document body tags')
+      return xmlContent
+    }
+    
+    const bodyStart = bodyStartMatch.index + bodyStartMatch[0].length
+    const bodyEnd = bodyEndMatch.index
+    const bodyContent = xmlContent.substring(bodyStart, bodyEnd)
+    
+    // Find the last <w:sectPr> (section properties) which should stay outside the loop
+    const sectPrMatch = bodyContent.match(/<w:sectPr[\s\S]*?<\/w:sectPr>\s*$/)
+    let contentToWrap = bodyContent
+    let sectPr = ''
+    
+    if (sectPrMatch) {
+      sectPr = sectPrMatch[0]
+      contentToWrap = bodyContent.substring(0, bodyContent.lastIndexOf(sectPrMatch[0]))
+    }
+    
+    // Check if the content is primarily a table
+    const hasTable = contentToWrap.includes('<w:tbl>')
+    
+    let wrappedContent
+    
+    if (hasTable) {
+      // For table-based templates, we need to wrap at table row level
+      // Find all table rows and wrap them with the loop
+      wrappedContent = this.wrapTableWithLoop(contentToWrap)
+    } else {
+      // For simple templates, wrap the entire content
+      const pageBreakXml = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+      wrappedContent = 
+        '<w:p><w:r><w:t>{#pages}</w:t></w:r></w:p>' +
+        contentToWrap +
+        pageBreakXml +
+        '<w:p><w:r><w:t>{/pages}</w:t></w:r></w:p>'
+    }
+    
+    const result = 
+      xmlContent.substring(0, bodyStart) +
+      wrappedContent +
+      sectPr +
+      xmlContent.substring(bodyEnd)
+    
+    console.log('[PREPROCESS] Template wrapped with {#pages}...{/pages} tags')
+    
+    return result
+  }
+
+  /**
+   * Wrap table content with pages loop at the appropriate level
+   */
+  wrapTableWithLoop(content) {
+    // Strategy: Put loop tags before the first table and after the last table
+    // This allows the entire page content (including tables) to be repeated
+    
+    const firstTableStart = content.indexOf('<w:tbl>')
+    const lastTableEnd = content.lastIndexOf('</w:tbl>') + '</w:tbl>'.length
+    
+    if (firstTableStart === -1) {
+      // No table found, fall back to simple wrapping
+      const pageBreakXml = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+      return '<w:p><w:r><w:t>{#pages}</w:t></w:r></w:p>' +
+             content +
+             pageBreakXml +
+             '<w:p><w:r><w:t>{/pages}</w:t></w:r></w:p>'
+    }
+    
+    // Content before first table
+    const beforeTables = content.substring(0, firstTableStart)
+    // All tables and content between them
+    const tablesContent = content.substring(firstTableStart, lastTableEnd)
+    // Content after last table
+    const afterTables = content.substring(lastTableEnd)
+    
+    // Page break XML
+    const pageBreakXml = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+    
+    // Wrap: put loop start in a paragraph before tables, loop end after tables
+    return '<w:p><w:r><w:t>{#pages}</w:t></w:r></w:p>' +
+           beforeTables +
+           tablesContent +
+           afterTables +
+           pageBreakXml +
+           '<w:p><w:r><w:t>{/pages}</w:t></w:r></w:p>'
+  }
+
+  /**
+   * Chunk flat data array into pages with items array
+   * @param {Array} flatArray - Flat array of records
+   * @param {number} chunkSize - Number of items per page
+   * @returns {Array} - Array of page objects: [{ items: [...] }, { items: [...] }]
+   */
+  chunkData(flatArray, chunkSize) {
+    const pages = []
+    
+    for (let i = 0; i < flatArray.length; i += chunkSize) {
+      const pageItems = flatArray.slice(i, i + chunkSize)
+      
+      // Pad with empty objects if this is the last page and incomplete
+      while (pageItems.length < chunkSize) {
+        // Create empty object with same keys but empty values
+        const emptyItem = {}
+        if (flatArray.length > 0) {
+          Object.keys(flatArray[0]).forEach(key => {
+            emptyItem[key] = ''
+          })
+        }
+        pageItems.push(emptyItem)
+      }
+      
+      pages.push({ items: pageItems })
+    }
+    
+    return pages
+  }
+
   async validateTemplate(templateArrayBuffer, data) {
     if (data.length === 0) {
       throw new Error('No data to validate against')
@@ -12,77 +445,40 @@ export class LabelGenerator {
 
     try {
       const zip = new PizZip(templateArrayBuffer)
-      const doc = new Docxtemplater(zip, {
-        paragraphLoop: true,
-        linebreaks: true,
-        errorLogging: true
-      })
-      const templateContent = doc.getFullText()
+      let xmlContent = zip.files['word/document.xml']?.asText()
+
+      if (!xmlContent) {
+        throw new Error('Invalid Word template format')
+      }
 
       const headers = Object.keys(data[0])
       
-      // Match both numbered and simple placeholders, but exclude loop tags like {#pages} and {/pages}
-      const numberedPattern = /\{([^}#\/]+)#(\d+)\}/g
-      const simplePattern = /\{([^}#\/]+)\}/g
+      // Match placeholders, excluding special tags like {:next}
+      const placeholderPattern = /\{([^}:][^}]*)\}/g
+      const matches = [...xmlContent.matchAll(placeholderPattern)]
       
-      const numberedMatches = [...templateContent.matchAll(numberedPattern)]
-      const simpleMatches = [...templateContent.matchAll(simplePattern)]
-
       const missingColumns = []
-      const placeholderNumbers = new Set()
       
-      // Check numbered placeholders
-      numberedMatches.forEach((match) => {
-        const columnName = match[1].trim()
-        const number = parseInt(match[2])
+      matches.forEach((match) => {
+        const tagContent = match[1].trim()
         
-        // Skip if it's a loop tag
-        if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
+        // Skip loop tags and special docxtemplater syntax
+        if (tagContent.startsWith('#') || 
+            tagContent.startsWith('/') ||
+            tagContent.startsWith('@') ||
+            tagContent.startsWith('.') ||
+            tagContent === 'pages') {
           return
         }
         
-        if (!headers.includes(columnName)) {
-          missingColumns.push(columnName)
+        // Check if the column exists
+        if (!headers.includes(tagContent)) {
+          missingColumns.push(tagContent)
         }
-        
-        placeholderNumbers.add(number)
-      })
-      
-      // Check simple placeholders (treat as #1)
-      simpleMatches.forEach((match) => {
-        const columnName = match[1].trim()
-        
-        // Skip loop tags and special tags
-        if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
-          return
-        }
-        
-        if (!headers.includes(columnName)) {
-          missingColumns.push(columnName)
-        }
-        
-        // Simple placeholders count as #1
-        placeholderNumbers.add(1)
       })
 
       if (missingColumns.length > 0) {
         throw new Error(`Template references missing columns: ${[...new Set(missingColumns)].join(', ')}`)
-      }
-      
-      // Validate placeholder numbering (no gaps)
-      if (placeholderNumbers.size > 0) {
-        const numbers = Array.from(placeholderNumbers).sort((a, b) => a - b)
-        const maxNumber = Math.max(...numbers)
-        
-        for (let i = 1; i <= maxNumber; i++) {
-          if (!numbers.includes(i)) {
-            throw new Error(
-              `❌ Template has placeholder numbering gap: Missing #${i}\n\n` +
-              `Found placeholders: ${numbers.map(n => `#${n}`).join(', ')}\n\n` +
-              `💡 Fix: Make sure your placeholders are numbered sequentially starting from #1 without gaps.`
-            )
-          }
-        }
       }
     } catch (error) {
       if (error.properties && error.properties.errors) {
@@ -97,103 +493,12 @@ export class LabelGenerator {
         throw new Error(
           `❌ Template has placeholder formatting errors:\n\n${errorMessages.join('\n')}\n\n` +
           `💡 Fix: Open your Word template and remove any spaces immediately after the opening brace "{" in placeholders.\n` +
-          `✅ Correct: {Duplicates#1}\n` +
-          `❌ Wrong: { Duplicates#1} (space after {)`
+          `✅ Correct: {genus}\n` +
+          `❌ Wrong: { genus} (space after {)`
         )
       }
       throw error
     }
-  }
-
-  async ensurePagesLoop(templateArrayBuffer) {
-    try {
-      const zip = new PizZip(templateArrayBuffer)
-      let content = zip.files['word/document.xml']?.asText()
-
-      if (!content) {
-        throw new Error('Invalid Word template format')
-      }
-
-      // Check if pages loop already exists
-      if (content.includes('{#pages}') && content.includes('{/pages}')) {
-        // Check if page break exists before closing tag
-        const pagesLoopPattern = /{#pages}([\s\S]*?){\/pages}/
-        const match = content.match(pagesLoopPattern)
-        
-        if (match) {
-          const loopContent = match[1]
-          // Check if there's already a page break before the closing {/pages} tag
-          const hasPageBreak = loopContent.includes('<w:br w:type="page"/>')
-          
-          if (!hasPageBreak) {
-            // Add page break before the closing {/pages} tag
-            const pageBreakXml = '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
-            content = content.replace(
-              '{/pages}',
-              pageBreakXml + '{/pages}'
-            )
-            
-            // Save the modified content back
-            zip.file('word/document.xml', content)
-            return zip.generate({ type: 'arraybuffer' })
-          }
-        }
-        
-        return templateArrayBuffer
-      }
-      
-      // Don't auto-modify - return original template
-      return templateArrayBuffer
-    } catch (error) {
-      console.warn('Template check failed, using original:', error)
-      return templateArrayBuffer
-    }
-  }
-
-  async detectItemsPerPage(templateArrayBuffer) {
-    const zip = new PizZip(templateArrayBuffer)
-    const doc = new Docxtemplater(zip)
-    const templateContent = doc.getFullText()
-
-    // Match both numbered and simple placeholders, excluding loop tags
-    const numberedPattern = /\{([^}#\/]+)#(\d+)\}/g
-    const simplePattern = /\{([^}#\/]+)\}/g
-    
-    const numberedMatches = [...templateContent.matchAll(numberedPattern)]
-    const simpleMatches = [...templateContent.matchAll(simplePattern)]
-
-    let maxNumber = 0
-    
-    // Check numbered placeholders
-    numberedMatches.forEach((match) => {
-      const columnName = match[1].trim()
-      const number = parseInt(match[2])
-      
-      // Skip loop tags
-      if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
-        return
-      }
-      
-      if (number > maxNumber) {
-        maxNumber = number
-      }
-    })
-    
-    // If only simple placeholders exist, check them
-    if (maxNumber === 0) {
-      simpleMatches.forEach((match) => {
-        const columnName = match[1].trim()
-        
-        // Skip loop tags
-        if (columnName === 'pages' || columnName.startsWith('#') || columnName.startsWith('/')) {
-          return
-        }
-        
-        maxNumber = 1
-      })
-    }
-
-    return maxNumber || 4
   }
 
   async generateLabels(templateArrayBuffer, data, config, progressCallback) {
@@ -202,18 +507,14 @@ export class LabelGenerator {
         throw new Error('No template data provided')
       }
 
-      progressCallback?.('Validating template...')
-      
-      // Use ArrayBuffer directly - no more stale File references!
-      const modifiedTemplateArrayBuffer = await this.ensurePagesLoop(templateArrayBuffer)
-      
-      await this.validateTemplate(modifiedTemplateArrayBuffer, data)
-
       progressCallback?.('Processing data...')
-      const itemsPerPage = await this.detectItemsPerPage(modifiedTemplateArrayBuffer)
-
+      
       // Apply record selection
       let processedData = this.applyRecordSelection(data, config)
+
+      // Apply sorting
+      progressCallback?.('Sorting data...')
+      processedData = this.applySorting(processedData, config)
 
       // Apply filters
       if (config.filters && config.filters.length > 0) {
@@ -234,6 +535,8 @@ export class LabelGenerator {
       // Apply duplicates handling
       const duplicatedData = await this.applyDuplicatesHandling(processedData, config, progressCallback)
 
+      console.log(`[DEBUG] Total labels after duplication: ${duplicatedData.length}`)
+
       // VALIDATION: Check if duplicate count is reasonable
       if (duplicatedData.length > processedData.length * VALIDATION_LIMITS.MAX_DUPLICATE_MULTIPLIER) {
         throw new Error(
@@ -242,9 +545,41 @@ export class LabelGenerator {
         )
       }
 
-      // Split data into pages
-      const totalPages = Math.ceil(duplicatedData.length / itemsPerPage)
+      // Load and preprocess template
+      progressCallback?.('Preprocessing template...')
+      const zip = new PizZip(templateArrayBuffer)
+      let xmlContent = zip.files['word/document.xml']?.asText()
+
+      if (!xmlContent) {
+        throw new Error('Invalid Word template format')
+      }
+
+      console.log('[DEBUG] Original XML sample:', xmlContent.substring(0, 2000))
+
+      // Get headers from data for preprocessing
+      const headers = data.length > 0 ? Object.keys(data[0]) : []
+
+      // Step 1: Preprocess placeholders (transform {genus} to {items[0]['genus']})
+      const { processedXml, itemsPerPage } = this.preprocessTemplate(xmlContent, headers)
       
+      console.log(`[DEBUG] Detected ${itemsPerPage} items per page from template`)
+      console.log('[DEBUG] Processed XML sample:', processedXml.substring(0, 2000))
+
+      // Step 2: Wrap with pages loop
+      const finalXml = this.wrapWithPagesLoop(processedXml)
+      
+      console.log('[DEBUG] Final XML with loop:', finalXml.substring(0, 3000))
+      
+      // Save processed XML back to zip
+      zip.file('word/document.xml', finalXml)
+
+      // Step 3: Chunk data into pages
+      const pages = this.chunkData(duplicatedData, itemsPerPage)
+      
+      const totalPages = pages.length
+      console.log(`[DEBUG] Will generate ${totalPages} pages (${duplicatedData.length} labels ÷ ${itemsPerPage} per page)`)
+      console.log('[DEBUG] Sample page data:', JSON.stringify(pages[0], null, 2))
+
       // VALIDATION: Check if page count is reasonable
       if (totalPages > VALIDATION_LIMITS.MAX_PAGE_COUNT) {
         throw new Error(
@@ -252,64 +587,65 @@ export class LabelGenerator {
           `This is too large. Please check:\n` +
           `• Your duplicate column values\n` +
           `• Record selection settings\n` +
-          `• Template structure (#1, #2, etc.)`
+          `• Template structure`
         )
       }
 
-      progressCallback?.(`Processing data (preparing ${totalPages} pages)...`)
+      progressCallback?.(`Creating document (${totalPages} pages)...`)
       
-      const pages = []
-      for (let i = 0; i < duplicatedData.length; i += itemsPerPage) {
-        const pageData = duplicatedData.slice(i, i + itemsPerPage)
-
-        const numberedItems = {}
-        
-        // Process actual data items
-        for (let j = 0; j < itemsPerPage; j++) {
-          const item = pageData[j] || {}
-          Object.keys(item).forEach((key) => {
-            // Create both numbered and simple placeholders
-            numberedItems[`${key}#${j + 1}`] = item[key] || ''
-            // For #1, also create simple placeholder
-            if (j === 0) {
-              numberedItems[key] = item[key] || ''
-            }
-          })
-        }
-
-        // Add empty placeholders if needed
-        if (pageData.length < itemsPerPage && data.length > 0) {
-          const sampleKeys = Object.keys(data[0])
-          for (let j = pageData.length; j < itemsPerPage; j++) {
-            sampleKeys.forEach((key) => {
-              numberedItems[`${key}#${j + 1}`] = ''
-              if (j === 0) {
-                numberedItems[key] = ''
-              }
-            })
-          }
-        }
-
-        pages.push(numberedItems)
-
-        // Update progress and yield control periodically
-        if (pages.length % PROGRESS_UPDATE.CHUNK_SIZE === 0) {
-          progressCallback?.(`Processing data (page ${pages.length} of ${totalPages})...`)
-          await new Promise((resolve) => setTimeout(resolve, PROGRESS_UPDATE.YIELD_INTERVAL_MS))
-        }
-      }
-
-      progressCallback?.(`Creating document (${pages.length} pages)...`)
-      const zip = new PizZip(modifiedTemplateArrayBuffer)
+      // Create docxtemplater with angular expression parser for array indexing
       const doc = new Docxtemplater(zip, {
         paragraphLoop: true,
         linebreaks: true,
-        errorLogging: true
+        parser: expressionParser
       })
       
-      progressCallback?.(`Rendering document (${pages.length} pages)...`)
+      progressCallback?.(`Rendering document (${totalPages} pages)...`)
+      
       try {
+        console.log('[DEBUG] Rendering with data structure:', { 
+          pagesCount: pages.length, 
+          itemsPerPage,
+          samplePageKeys: pages[0] ? Object.keys(pages[0]) : [],
+          sampleItemKeys: pages[0]?.items?.[0] ? Object.keys(pages[0].items[0]) : []
+        })
+        
         doc.render({ pages })
+        
+        // Verify rendering worked
+        const renderedText = doc.getFullText()
+        console.log('[DEBUG] Rendered template sample (first 500 chars):', renderedText.substring(0, 500))
+        
+        // Check for unresolved placeholders
+        const remainingPlaceholders = renderedText.match(/\{[^}]+\}/g)
+        if (remainingPlaceholders && remainingPlaceholders.length > 0) {
+          const actualUnresolved = remainingPlaceholders.filter(p => 
+            p !== '{#pages}' && p !== '{/pages}' && !p.includes('items[')
+          )
+          
+          if (actualUnresolved.length > 0) {
+            console.warn('[DEBUG] WARNING: Found unresolved placeholders:', actualUnresolved.slice(0, 10))
+            
+            // Extract just the column names from unresolved placeholders
+            const unresolvedColumns = actualUnresolved.map(p => {
+              // Extract from {items[0]['Column Name']} or {items[0].ColumnName}
+              const bracketMatch = p.match(/\['([^']+)'\]/)
+              if (bracketMatch) return bracketMatch[1]
+              const dotMatch = p.match(/\.([a-zA-Z0-9_]+)/)
+              if (dotMatch) return dotMatch[1]
+              return p.replace(/[{}]/g, '')
+            })
+            
+            throw new Error(
+              `❌ Template rendering incomplete. Found unresolved placeholders:\n\n` +
+              `${unresolvedColumns.slice(0, 5).join(', ')}${unresolvedColumns.length > 5 ? '...' : ''}\n\n` +
+              `This usually means:\n` +
+              `• Placeholder names don't match your Excel column headers exactly (case-sensitive!)\n` +
+              `• Your Excel has these columns: ${Object.keys(data[0] || {}).slice(0, 5).join(', ')}...\n\n` +
+              `💡 Check that your template placeholders match your column names exactly.`
+            )
+          }
+        }
       } catch (error) {
         if (error.properties && error.properties.errors) {
           const errorMessages = error.properties.errors.map(e => e.properties?.explanation || e.message)
@@ -349,6 +685,77 @@ export class LabelGenerator {
     }
   }
 
+  /**
+   * Save the preprocessed template for debugging
+   */
+  saveDebugTemplate(arrayBuffer) {
+    try {
+      const blob = new Blob([arrayBuffer], {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+      })
+      const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
+      saveAs(blob, `DEBUG_preprocessed_template_${timestamp}.docx`)
+      console.log('[DEBUG] Preprocessed template saved for inspection')
+    } catch (error) {
+      console.warn('[DEBUG] Failed to save debug template:', error)
+    }
+  }
+
+  applySorting(data, config) {
+    if (!config.sorting?.enabled || !config.sorting?.rules?.length) {
+      return data
+    }
+
+    const sortedData = [...data]
+    
+    sortedData.sort((a, b) => {
+      for (const rule of config.sorting.rules) {
+        const { column, order } = rule
+        if (!column) continue
+        
+        const valueA = a[column]
+        const valueB = b[column]
+        
+        const aEmpty = valueA === null || valueA === undefined || valueA === ''
+        const bEmpty = valueB === null || valueB === undefined || valueB === ''
+        
+        if (aEmpty && bEmpty) continue
+        if (aEmpty) return 1
+        if (bEmpty) return -1
+        
+        const numA = parseFloat(valueA)
+        const numB = parseFloat(valueB)
+        if (!isNaN(numA) && !isNaN(numB)) {
+          if (numA !== numB) {
+            return order === 'asc' ? numA - numB : numB - numA
+          }
+          continue
+        }
+        
+        const dateA = new Date(valueA)
+        const dateB = new Date(valueB)
+        if (!isNaN(dateA.getTime()) && !isNaN(dateB.getTime())) {
+          if (dateA.getTime() !== dateB.getTime()) {
+            return order === 'asc' 
+              ? dateA.getTime() - dateB.getTime() 
+              : dateB.getTime() - dateA.getTime()
+          }
+          continue
+        }
+        
+        const strA = String(valueA).toLowerCase()
+        const strB = String(valueB).toLowerCase()
+        const comparison = strA.localeCompare(strB)
+        if (comparison !== 0) {
+          return order === 'asc' ? comparison : -comparison
+        }
+      }
+      return 0
+    })
+
+    return sortedData
+  }
+
   applyRecordSelection(data, config) {
     const { mode, startRow, endRow } = config.recordSelection
 
@@ -370,7 +777,6 @@ export class LabelGenerator {
     const totalRecords = data.length
 
     if (collate === 'uncollated') {
-      // Uncollated: Group all copies together (1,1,1,2,2,2,3,3,3)
       for (let i = 0; i < data.length; i++) {
         const row = data[i]
         let duplicateCount = 1
@@ -390,7 +796,6 @@ export class LabelGenerator {
         
         if (duplicateCount < 1) duplicateCount = 1
 
-        // Add all copies of this record together
         for (let j = 0; j < duplicateCount; j++) {
           result.push({ ...row })
         }
@@ -402,7 +807,6 @@ export class LabelGenerator {
         }
       }
     } else {
-      // Collated (default): Interleave copies (1,2,3,1,2,3,1,2,3)
       const recordCounts = []
       let maxCopies = 0
       
@@ -428,7 +832,6 @@ export class LabelGenerator {
         maxCopies = Math.max(maxCopies, duplicateCount)
       }
 
-      // Now interleave: for each copy number, go through all records
       for (let copyNum = 0; copyNum < maxCopies; copyNum++) {
         for (let i = 0; i < data.length; i++) {
           if (copyNum < recordCounts[i]) {

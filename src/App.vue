@@ -209,7 +209,7 @@ const generateLabels = async () => {
 
     hideLoading()
     displayOutput(
-      `Success! Generated ${result.stats.pages} pages (${result.stats.itemsPerPage} labels per page)`,
+      `✅ Success! Generated ${result.stats.pages} pages with ${result.stats.totalLabels} labels (${result.stats.itemsPerPage} per page)`,
       'success'
     )
   } catch (error) {

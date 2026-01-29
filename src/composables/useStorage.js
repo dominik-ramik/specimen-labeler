@@ -12,8 +12,8 @@ import {
 const STORAGE_PREFIX = 'specimensLabeler_'
 const DEBOUNCE_DELAY_MS = 500
 
-// Configuration state
-const configuration = ref({
+// Default configuration object
+const defaultConfig = {
   recordSelection: {
     mode: 'all',
     startRow: 1,
@@ -41,8 +41,15 @@ const configuration = ref({
       lonColumn: '',
       outputFormat: 'dms'
     }
+  },
+  sorting: {
+    enabled: false,
+    rules: [] // Array of { column: string, order: 'asc' | 'desc' }
   }
-})
+}
+
+// Configuration state
+const configuration = ref(defaultConfig)
 
 // Template storage - store file data with ArrayBuffer
 const storedTemplate = ref(null)

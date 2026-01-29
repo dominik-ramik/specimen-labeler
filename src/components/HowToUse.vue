@@ -40,7 +40,7 @@
 
           <h4 class="section-heading">How to use it - Step by step:</h4>
           <ol class="steps-list">
-            <li><strong>Prepare your Word template</strong> — Create a .docx file with page loop tags <code class="inline-code">{#pages}</code>...<code class="inline-code">{/pages}</code>, numbered placeholders like <code class="inline-code">{Plant Name#1}</code>, and a page break before the closing tag (see detailed example below)</li>
+            <li><strong>Prepare your Word template</strong> — Create a .docx file with placeholders like <code class="inline-code">{Plant Name}</code>. Use <code class="inline-code">{:next}</code> to separate multiple labels on a page (see detailed example below)</li>
             <li><strong>Prepare your Excel spreadsheet or CSV file</strong> — Organize your specimen data in columns with clear headers that match your template placeholders exactly (case-sensitive!)</li>
             <li><strong>Upload the Word template</strong> — Drag and drop (or click to browse) your .docx template file. It will be saved in your browser for future use</li>
             <li><strong>Upload the Excel/CSV file</strong> — Drag and drop (or click to browse) your .xlsx or .csv data file. It will also be saved in your browser for reuse</li>
@@ -220,12 +220,27 @@
         <div class="content-card">
           <h4 class="section-heading">How to Construct a Template</h4>
           
+          <div class="highlight-box warning-box">
+            <h5 class="highlight-subtitle">⚠️ Common Template Mistakes</h5>
+            <ul class="feature-list">
+              <li><strong>Case sensitivity:</strong> Column names must match exactly: {Plant Name} ≠ {plant name}</li>
+              <li><strong>Spaces in placeholders:</strong> Use {genus} not { genus } (no spaces after opening brace)</li>
+              <li><strong>Missing {:next} tag:</strong> For multiple labels per page, use {:next} between label blocks</li>
+              <li><strong>Page loops:</strong> The app automatically adds page loop tags — you don't need to add them!</li>
+            </ul>
+          </div>
+
           <div class="highlight-box tech-box">
             <h5 class="highlight-subtitle">Template Engine</h5>
             <p class="highlight-text">
               This application uses <strong>Docxtemplater</strong> as the underlying template engine.
-              Docxtemplater is a powerful library that allows you to generate Word documents from templates
-              using simple placeholder syntax.
+              The app preprocesses your template automatically, so you just write simple placeholders
+              like <code class="inline-code">{genus}</code> and <code class="inline-code">{species}</code>.
+            </p>
+            <p class="highlight-text">
+              <strong>💡 Simple syntax:</strong> Just use your column names in curly braces. For multiple labels
+              per page, add <code class="inline-code">{:next}</code> between label blocks to advance to the next record.
+              The app handles all the complex templating logic automatically!
             </p>
             <p class="highlight-text">
               <strong>Learn more:</strong> 
@@ -243,54 +258,41 @@
 
           <h5 class="subsection-heading">Basic Template Structure</h5>
           
-          <p class="section-text">Your Word template can contain <strong>one or multiple label layouts on a single page</strong>. Each layout is identified by a unique number using the <code class="inline-code">#N</code> notation.</p>
+          <p class="section-text">Your Word template uses a simple cursor-based system. Use <code class="inline-code">{:next}</code> to advance to the next record when creating multiple labels per page.</p>
 
           <ul class="instruction-list">
             <li>
-              <strong>Page loop tags:</strong> Wrap your entire template content with <code class="inline-code">{#pages}</code> at
-              the beginning and <code class="inline-code">{/pages}</code> at the end
-              <div class="info-note">
-                <strong>Note:</strong> These tags tell the app where to repeat the page content for multiple records
-              </div>
-            </li>
-            <li>
-              <strong>Page break:</strong> Add a page break (Ctrl+Enter in Word) 
-              just before the <code class="inline-code">{/pages}</code> tag to ensure each page prints separately
-              <div class="info-note">
-                <strong>Tip:</strong> In Word, press Ctrl+Enter to insert a page break, 
-                or use Insert → Page Break from the ribbon
-              </div>
-            </li>
-            <li>
-              <strong>Placeholders:</strong> Use curly braces with column names:
-              <ul class="sub-list">
-                <li><strong>Simple format:</strong> <code class="inline-code">{Plant Name}</code> — automatically treated as position #1</li>
-                <li><strong>Numbered format:</strong> <code class="inline-code">{Plant Name#1}</code>, <code class="inline-code">{Plant Name#2}</code>, <code class="inline-code">{Plant Name#3}</code> — for multiple labels per page</li>
-              </ul>
+              <strong>Placeholders:</strong> Use curly braces with your column names: <code class="inline-code">{Plant Name}</code>, <code class="inline-code">{Location}</code>, <code class="inline-code">{Date Collected}</code>
               <div class="info-note highlight">
                 <strong>Important:</strong> Column names must <em>exactly match</em> 
                 your spreadsheet column headers (case-sensitive!)
               </div>
             </li>
             <li>
-              <strong>Multiple labels per page:</strong> The numbers (#1, #2, #3...) define different label positions:
+              <strong>Cursor advancement:</strong> Use <code class="inline-code">{:next}</code> to move to the next record
               <ul class="sub-list">
-                <li><strong>#1</strong> = First label position</li>
-                <li><strong>#2</strong> = Second label position</li>
-                <li><strong>#3</strong> = Third label position, and so on...</li>
+                <li>All placeholders <em>before</em> the first {:next} refer to record #1</li>
+                <li>All placeholders <em>after</em> {:next} refer to record #2, and so on</li>
+                <li>If you omit {:next}, all placeholders refer to the same record (useful for paired/duplicate labels)</li>
               </ul>
+            </li>
+            <li>
+              <strong>Multiple labels per page:</strong> Simply add more placeholder blocks separated by {:next}:
               <div class="info-note">
-                <strong>Example:</strong> If your template has placeholders #1 through #4, and you have 12 records, 
-                the app will generate 3 pages (4 labels per page)
+                <strong>Example:</strong> A template with 3 {:next} tags creates 4 labels per page.
+                If you have 12 records, the app will generate 3 pages.
               </div>
+            </li>
+            <li>
+              <strong>Page loops (automatic):</strong> The app automatically wraps your template with page loop tags and adds page breaks. You don't need to add them manually!
             </li>
           </ul>
 
           <h5 class="subsection-heading">Template Flexibility</h5>
           <ul class="option-list">
-            <li><strong>Single label per page:</strong> Use simple placeholders like <code class="inline-code">{Plant Name}</code> (or <code class="inline-code">{Plant Name#1}</code>)</li>
-            <li><strong>Multiple labels per page:</strong> Use numbered placeholders <code class="inline-code">{Plant Name#1}</code>, <code class="inline-code">{Plant Name#2}</code>, etc.</li>
-            <li><strong>Mixed numbering:</strong> You can mix simple and numbered placeholders — simple ones default to #1</li>
+            <li><strong>Single label per page:</strong> Just use placeholders like <code class="inline-code">{Plant Name}</code> without any {:next} tags</li>
+            <li><strong>Multiple labels per page:</strong> Add <code class="inline-code">{:next}</code> between each label block</li>
+            <li><strong>Paired labels (same data twice):</strong> Omit {:next} between two label blocks to print the same record twice</li>
           </ul>
 
           <h5 class="subsection-heading">Supported File Formats</h5>
@@ -377,48 +379,43 @@
             <h4 class="grid-heading">Word Template Format</h4>
             <div class="info-box important-style">
               <strong>Column Name Mapping:</strong> Placeholder names must match your Excel column headers exactly (case-sensitive)!
-              <br>Example: Excel column <code class="inline-code">"Plant Name"</code> → Template: <code class="inline-code">{Plant Name#1}</code>
+              <br>Example: Excel column <code class="inline-code">"Plant Name"</code> → Template: <code class="inline-code">{Plant Name}</code>
             </div>
             <div class="word-template">
-              <div class="template-tag">
-                {#pages}
-              </div>
               <div class="template-content">
                 <div class="label-item">
-                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name#1}</span></div>
-                  <div><strong>Location:</strong> <span class="placeholder">{Location#1}</span></div>
-                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected#1}</span></div>
+                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name}</span></div>
+                  <div><strong>Location:</strong> <span class="placeholder">{Location}</span></div>
+                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected}</span></div>
                 </div>
                 <div class="label-item">
-                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name#2}</span></div>
-                  <div><strong>Location:</strong> <span class="placeholder">{Location#2}</span></div>
-                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected#2}</span></div>
+                  <div class="cursor-tag">{:next}</div>
+                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name}</span></div>
+                  <div><strong>Location:</strong> <span class="placeholder">{Location}</span></div>
+                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected}</span></div>
                 </div>
               </div>
               <div class="template-content" style="margin-top: 10px">
                 <div class="label-item">
-                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name#3}</span></div>
-                  <div><strong>Location:</strong> <span class="placeholder">{Location#3}</span></div>
-                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected#3}</span></div>
+                  <div class="cursor-tag">{:next}</div>
+                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name}</span></div>
+                  <div><strong>Location:</strong> <span class="placeholder">{Location}</span></div>
+                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected}</span></div>
                 </div>
                 <div class="label-item">
-                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name#4}</span></div>
-                  <div><strong>Location:</strong> <span class="placeholder">{Location#4}</span></div>
-                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected#4}</span></div>
+                  <div class="cursor-tag">{:next}</div>
+                  <div><strong>Plant:</strong> <span class="placeholder">{Plant Name}</span></div>
+                  <div><strong>Location:</strong> <span class="placeholder">{Location}</span></div>
+                  <div><strong>Date:</strong> <span class="placeholder">{Date Collected}</span></div>
                 </div>
               </div>
               <div class="page-break-indicator">
-                ⏎ Page Break (Ctrl+Enter)
-              </div>
-              <div class="template-tag">
-                {/pages}
+                ⏎ Page Break (added automatically)
               </div>
             </div>
             <div class="info-box tip-style" style="margin-top: 12px;">
-              <strong>Important:</strong> The <code class="inline-code">{#pages}</code> and
-              <code class="inline-code">{/pages}</code> tags tell the app where to repeat the page
-              content. The page break before <code class="inline-code">{/pages}</code> ensures each 
-              page prints separately. Without the page break, all labels will run together!
+              <strong>Note:</strong> The app automatically wraps your template with page loop tags
+              and adds page breaks. You just need to create your label layout with {:next} between labels!
             </div>
           </div>
         </div>
@@ -525,6 +522,112 @@
             </div>
           </div>
         </div>
+
+        <!-- Advanced Example: Paired Labels -->
+        <div style="margin-top: 50px">
+          <h4 class="section-heading">Advanced Example: Paired Labels (Different Formats, Same Record)</h4>
+          <p class="section-text">
+            Sometimes you need <strong>two different label types for the same specimen</strong> — for example, 
+            a small label for vials and a detailed label to stick on containers. By <em>omitting</em> the 
+            <code class="inline-code">{:next}</code> tag between labels, both will use the same record data.
+          </p>
+
+          <div class="highlight-box tech-box" style="margin-bottom: 20px;">
+            <h5 class="highlight-subtitle">💡 When to Use Paired Labels</h5>
+            <ul class="feature-list">
+              <li><strong>Vial + Container labels:</strong> Small label inside vial, detailed label outside</li>
+              <li><strong>Specimen + Backup:</strong> One for the specimen, one for your records</li>
+              <li><strong>Different languages:</strong> Same data in two languages side-by-side</li>
+              <li><strong>Easy cutting:</strong> Arrange different label sizes for efficient sheet cutting</li>
+            </ul>
+          </div>
+
+          <div class="example-grid">
+            <div class="grid-item">
+              <h4 class="grid-heading">Template with Paired Labels</h4>
+              <p class="grid-subtext">No {:next} between labels = same record printed twice</p>
+              <div class="word-template">
+                <div class="paired-label-demo">
+                  <div class="small-label">
+                    <div class="label-type-badge">Small Label (vial)</div>
+                    <div><span class="placeholder">{Species}</span></div>
+                    <div><span class="placeholder">{Location}</span></div>
+                  </div>
+                  <div class="detailed-label">
+                    <div class="label-type-badge">Detailed Label (container)</div>
+                    <div><strong>Museum Collection</strong></div>
+                    <div>Species: <span class="placeholder">{Species}</span></div>
+                    <div>Location: <span class="placeholder">{Location}</span></div>
+                    <div>GPS: <span class="placeholder">{Coordinates}</span></div>
+                    <div>Collector: <span class="placeholder">{Collector}</span></div>
+                  </div>
+                </div>
+                <div class="cursor-tag" style="margin: 10px 0; text-align: center;">{:next}</div>
+                <div class="paired-label-demo">
+                  <div class="small-label">
+                    <div class="label-type-badge">Small Label (vial)</div>
+                    <div><span class="placeholder">{Species}</span></div>
+                    <div><span class="placeholder">{Location}</span></div>
+                  </div>
+                  <div class="detailed-label">
+                    <div class="label-type-badge">Detailed Label (container)</div>
+                    <div><strong>Museum Collection</strong></div>
+                    <div>Species: <span class="placeholder">{Species}</span></div>
+                    <div>Location: <span class="placeholder">{Location}</span></div>
+                    <div>GPS: <span class="placeholder">{Coordinates}</span></div>
+                    <div>Collector: <span class="placeholder">{Collector}</span></div>
+                  </div>
+                </div>
+                <div class="page-break-indicator">
+                  ⏎ Page Break (added automatically)
+                </div>
+              </div>
+              <div class="info-box tip-style" style="margin-top: 12px;">
+                <strong>Key point:</strong> The <code class="inline-code">{:next}</code> only appears 
+                <em>between record pairs</em>, not between the small and detailed label of the same record.
+              </div>
+            </div>
+
+            <div class="grid-item">
+              <h4 class="grid-heading">Generated Output</h4>
+              <p class="grid-subtext">Each record produces one small + one detailed label</p>
+              <div class="word-template output-preview">
+                <div class="paired-label-demo">
+                  <div class="small-label">
+                    <div class="label-type-badge filled">Record 1</div>
+                    <div>Beetle</div>
+                    <div>Paris</div>
+                  </div>
+                  <div class="detailed-label">
+                    <div class="label-type-badge filled">Record 1</div>
+                    <div><strong>Museum Collection</strong></div>
+                    <div>Species: Beetle</div>
+                    <div>Location: Paris</div>
+                    <div>GPS: 48.8566, 2.3522</div>
+                    <div>Collector: Jean Valjean</div>
+                  </div>
+                </div>
+                <hr class="record-divider">
+                <div class="paired-label-demo">
+                  <div class="small-label">
+                    <div class="label-type-badge filled">Record 2</div>
+                    <div>Ant</div>
+                    <div>London</div>
+                  </div>
+                  <div class="detailed-label">
+                    <div class="label-type-badge filled">Record 2</div>
+                    <div><strong>Museum Collection</strong></div>
+                    <div>Species: Ant</div>
+                    <div>Location: London</div>
+                    <div>GPS: 51.5074, -0.1278</div>
+                    <div>Collector: Paul Adamsen</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
       </div>
     </div>
   </div>
@@ -981,6 +1084,19 @@ watch(isExamplesExpanded, (newValue) => {
   border-radius: 2px;
 }
 
+.cursor-tag {
+  color: #e65100;
+  font-weight: bold;
+  background: #fff3e0;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: "Courier New", monospace;
+  font-size: 10px;
+  margin-bottom: 4px;
+  display: inline-block;
+  border: 1px dashed #ff9800;
+}
+
 .page-title {
   font-weight: 600;
   margin-bottom: 10px;
@@ -1027,5 +1143,55 @@ watch(isExamplesExpanded, (newValue) => {
   .template-content {
     flex-direction: column;
   }
+}
+
+/* Paired label demo styles */
+.paired-label-demo {
+  display: flex;
+  gap: 10px;
+  margin: 8px 0;
+}
+
+.small-label {
+  flex: 0 0 120px;
+  padding: 8px;
+  border: 2px dashed #ff9800;
+  background: #fff8e1;
+  font-size: 9px;
+  line-height: 1.3;
+  border-radius: 4px;
+}
+
+.detailed-label {
+  flex: 1;
+  padding: 8px;
+  border: 2px dashed #4caf50;
+  background: #e8f5e9;
+  font-size: 9px;
+  line-height: 1.4;
+  border-radius: 4px;
+}
+
+.label-type-badge {
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #666;
+  margin-bottom: 4px;
+  padding: 2px 4px;
+  background: rgba(0,0,0,0.05);
+  border-radius: 2px;
+  display: inline-block;
+}
+
+.label-type-badge.filled {
+  background: #667eea;
+  color: white;
+}
+
+.record-divider {
+  border: none;
+  border-top: 2px dashed #ccc;
+  margin: 12px 0;
 }
 </style>
