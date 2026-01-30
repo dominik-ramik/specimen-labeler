@@ -1,6 +1,6 @@
 {
   "name": "specimen-labeler",
-  "version": "1.0.0",
+  "version": "2.0.1",
   "description": "A web application for automatically generating formatted specimen labels",
   "private": true,
   "type": "module",

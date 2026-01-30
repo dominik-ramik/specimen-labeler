@@ -1,17 +1,30 @@
 <script setup>
-import { ref, computed, onMounted, nextTick } from 'vue'
-import packageJson from '../package.json'
-import FileDropZone from './components/FileDropZone.vue'
-import ConfigurationSection from './components/ConfigurationSection.vue'
-import DataSelectionSection from './components/DataSelectionSection.vue'
-import OutputMessage from './components/OutputMessage.vue'
-import LoadingOverlay from './components/LoadingOverlay.vue'
-import HowToUse from './components/HowToUse.vue'
-import { useAppState } from './composables/useAppState'
-import { useStorage } from './composables/useStorage'
-import { loadExcelMetadata, loadColumnNames, getExcelData, saveSheetName } from './utils/excelHandler'
-import { labelGenerator } from './services/labelGenerator'
-import { deleteFileFromIndexedDB } from './utils/indexedDBStorage'
+import { ref, computed, onMounted, watch } from "vue";
+import packageJson from "../package.json";
+import FileDropZone from "./components/FileDropZone.vue";
+import ConfigurationPanels from "./components/ConfigurationPanels.vue";
+import LoadingOverlay from "./components/LoadingOverlay.vue";
+import HelpDrawer from "./components/HelpDrawer.vue";
+import DataPreviewModal from "./components/DataPreviewModal.vue";
+import MessageDrawer from "./components/MessageDrawer.vue";
+import MessageIndicator from "./components/MessageIndicator.vue";
+import { useAppState } from "./composables/useAppState";
+import { useStorage } from "./composables/useStorage";
+import { usePlaceholderValidation } from "./composables/usePlaceholderValidation";
+import {
+  useMessages,
+  MESSAGE_TYPES,
+  MESSAGE_CATEGORIES,
+} from "./composables/useMessages";
+import {
+  loadExcelMetadata,
+  loadColumnNames,
+  getExcelData,
+  saveSheetName,
+} from "./utils/excelHandler";
+import { labelGenerator } from "./services/labelGenerator";
+import { deleteFileFromIndexedDB } from "./utils/indexedDBStorage";
+import { formatDataForPreview } from "./utils/previewFormatter";
 
 const {
   templateFile,
@@ -19,13 +32,14 @@ const {
   sheetName,
   headers,
   isReady,
+  cachedExcelData,
   setTemplateFile,
   setExcelFile,
   setSheetName,
   setHeaders,
-  setCachedExcelData, // 🆕 Import new functions
-  getCachedExcelData
-} = useAppState()
+  setCachedExcelData,
+  getCachedExcelData,
+} = useAppState();
 
 const {
   configuration,
@@ -33,425 +47,662 @@ const {
   loadConfiguration,
   saveTemplateToStorage,
   loadStoredTemplate,
-  getStoredTemplateArrayBuffer, // 🆕 Use ArrayBuffer directly
+  getStoredTemplateArrayBuffer,
   useStoredTemplate,
   saveExcelToStorage,
   loadStoredExcel,
   useStoredExcel,
-  initializeStorage
-} = useStorage()
+  initializeStorage,
+} = useStorage();
+
+const { validatePlaceholders, clearValidation } = usePlaceholderValidation();
+
+const {
+  addMessage,
+  clearCategory,
+  clearTransient,
+  removeMessageByKey,
+  hasMessages,
+  hasErrors,
+} = useMessages();
 
 // UI State
-const loading = ref(false)
-const loadingMessage = ref('Processing...')
-const loadingProgress = ref(0)
-const outputMessage = ref('');
-const outputType = ref('info');
-const showOutput = ref(false);
-const showOptions = ref(false);
+const loading = ref(false);
 const isGenerating = ref(false);
+const loadingMessage = ref("Processing...");
+const loadingProgress = ref(0);
+const showHelpDrawer = ref(false);
+const helpDrawerRef = ref(null);
+const showPreviewModal = ref(false);
+const previewData = ref([]);
+const templateColumns = ref([]);
+const showMessageDrawer = ref(false);
 
 // Sheet selection
 const availableSheets = ref([]);
-const selectedSheet = ref('');
-const fileType = ref(''); // Track if it's 'excel' or 'csv'
+const selectedSheet = ref("");
+const fileType = ref("");
 
 // File display
-const templateFilename = ref('');
-const templateFilesize = ref('')
-const excelFilename = ref('');
-const excelFilesize = ref('')
+const templateFilename = ref("");
+const templateFilesize = ref("");
+const excelFilename = ref("");
+const excelFilesize = ref("");
 const isTemplateSaved = ref(false);
 const isExcelSaved = ref(false);
 
 // Handle template file upload
 const handleTemplateFile = async (file) => {
   try {
-    setTemplateFile(file)
-    templateFilename.value = file.name
-    templateFilesize.value = formatFileSize(file.size)
-    isTemplateSaved.value = false
+    setTemplateFile(file);
+    templateFilename.value = file.name;
+    templateFilesize.value = formatFileSize(file.size);
+    isTemplateSaved.value = false;
 
-    // Save template to storage
     try {
-      await saveTemplateToStorage(file)
-      isTemplateSaved.value = true
+      await saveTemplateToStorage(file);
+      isTemplateSaved.value = true;
     } catch (error) {
-      console.warn('Failed to save template to storage:', error)
+      console.warn("Failed to save template to storage:", error);
+      addMessage({
+        type: MESSAGE_TYPES.WARNING,
+        category: MESSAGE_CATEGORIES.FILE,
+        title: "Template not saved to browser storage",
+        message:
+          "The template was loaded but could not be saved for future sessions.",
+        suggestion: error.message,
+        key: "template-storage-warning",
+      });
     }
   } catch (error) {
-    console.error('Error handling template file:', error)
-    displayOutput(`❌ Error: ${error.message}`, 'error')
+    console.error("Error handling template file:", error);
+    addMessage({
+      type: MESSAGE_TYPES.ERROR,
+      category: MESSAGE_CATEGORIES.FILE,
+      title: "Failed to load template",
+      message: error.message,
+      key: "template-load-error",
+    });
   }
-}
+};
+
+const totalDataRows = computed(() => {
+  return cachedExcelData.value ? cachedExcelData.value.length : 0;
+});
 
 // Handle Excel file upload
 const handleExcelFile = async (file) => {
   try {
-    setExcelFile(file)
-    excelFilename.value = file.name
-    excelFilesize.value = formatFileSize(file.size)
-    isExcelSaved.value = false
-    
-    // Reset sheet selection when new file is uploaded
-    selectedSheet.value = ''
-    setSheetName(null) // Clear the sheet name in state
-    setHeaders([]) // Clear headers
+    setExcelFile(file);
+    excelFilename.value = file.name;
+    excelFilesize.value = formatFileSize(file.size);
+    isExcelSaved.value = false;
 
-    showLoading('Loading data file...')
-    const result = await loadExcelMetadata(file)
-    availableSheets.value = result.sheets
-    fileType.value = result.fileType
+    selectedSheet.value = "";
+    setSheetName(null);
+    setHeaders([]);
 
-    // Save Excel to storage
+    showLoading("Loading data file...");
+    const result = await loadExcelMetadata(file);
+    availableSheets.value = result.sheets;
+    fileType.value = result.fileType;
+
     try {
-      await saveExcelToStorage(file)
-      isExcelSaved.value = true
+      await saveExcelToStorage(file);
+      isExcelSaved.value = true;
     } catch (error) {
-      console.warn('Failed to save data file to storage:', error)
+      console.warn("Failed to save data file to storage:", error);
+      addMessage({
+        type: MESSAGE_TYPES.WARNING,
+        category: MESSAGE_CATEGORIES.FILE,
+        title: "Data file not saved to browser storage",
+        message:
+          "The file was loaded but could not be saved for future sessions.",
+        suggestion: error.message,
+        key: "excel-storage-warning",
+      });
     }
 
-    // Auto-select sheet if available
     if (result.sheetSelected && result.selectedSheet) {
-      selectedSheet.value = result.selectedSheet
-      await handleSheetSelection(result.selectedSheet)
+      selectedSheet.value = result.selectedSheet;
+      await handleSheetSelection(result.selectedSheet);
     }
 
-    hideLoading()
+    hideLoading();
   } catch (error) {
-    hideLoading()
-    console.error('Error handling data file:', error)
-    displayOutput(`❌ Error reading data file: ${error.message}`, 'error')
+    hideLoading();
+    console.error("Error handling data file:", error);
+    addMessage({
+      type: MESSAGE_TYPES.ERROR,
+      category: MESSAGE_CATEGORIES.FILE,
+      title: "Failed to load data file",
+      message: error.message,
+      key: "excel-load-error",
+    });
   }
-}
+};
 
 // Handle sheet selection
 const handleSheetSelection = async (sheet) => {
-  if (!sheet || !excelFile.value) return
+  if (!sheet || !excelFile.value) return;
 
   try {
-    showLoading('Loading column headers...')
-    setSheetName(sheet)
-    
-    // 🆕 Save sheet name to localStorage for persistence across reloads
-    saveSheetName(sheet)
+    showLoading("Loading column headers...");
+    setSheetName(sheet);
+    saveSheetName(sheet);
 
-    const headerList = await loadColumnNames(excelFile.value, sheet)
-    setHeaders(headerList)
+    const headerList = await loadColumnNames(excelFile.value, sheet);
+    setHeaders(headerList);
 
-    // Pre-load and cache the Excel data
-    const excelData = await getExcelData(excelFile.value, sheet)
-    setCachedExcelData(excelData)
+    const excelData = await getExcelData(excelFile.value, sheet);
+    setCachedExcelData(excelData);
 
-    // Auto-detect duplicate column
     const duplicateColumn = headerList.find((h) =>
-      h.toLowerCase().includes('duplicate')
-    )
+      h.toLowerCase().includes("duplicate"),
+    );
     if (duplicateColumn) {
-      configuration.value.duplicates.column = duplicateColumn
+      configuration.value.duplicates.column = duplicateColumn;
     }
 
-    hideLoading()
+    hideLoading();
   } catch (error) {
-    hideLoading()
-    console.error('Error loading sheet:', error)
-    displayOutput(`❌ Error loading sheet: ${error.message}`, 'error')
+    hideLoading();
+    console.error("Error loading sheet:", error);
+    addMessage({
+      type: MESSAGE_TYPES.ERROR,
+      category: MESSAGE_CATEGORIES.FILE,
+      title: "Failed to load sheet",
+      message: error.message,
+      key: "sheet-load-error",
+    });
   }
-}
+};
 
 // Generate labels
 const generateLabels = async () => {
   try {
-    isGenerating.value = true
-    showLoading('Preparing to generate labels...')
-    showOutput.value = false
+    isGenerating.value = true;
+    showLoading("Preparing to generate labels...");
+    clearTransient(); // Clear non-persistent messages
 
     if (!isReady.value) {
-      throw new Error('Please select both Excel file, Word template, and sheet')
+      throw new Error(
+        "Please select both Excel file, Word template, and sheet",
+      );
     }
 
-    // Get fresh ArrayBuffer directly from storage
-    updateProgress('Loading template...')
-    const templateArrayBuffer = getStoredTemplateArrayBuffer()
-    
+    updateProgress("Loading template...");
+    const templateArrayBuffer = getStoredTemplateArrayBuffer();
+
     if (!templateArrayBuffer) {
       throw new Error(
-        'Template file not available. Please re-upload your template using the drop zone above.'
-      )
+        "Template file not available. Please re-upload your template using the drop zone above.",
+      );
     }
 
-    // Use cached Excel data instead of reading file again
-    updateProgress('Reading data...')
-    let data = getCachedExcelData()
-    
-    // If no cached data, read from file (fallback)
+    updateProgress("Reading data...");
+    let data = getCachedExcelData();
+
     if (!data) {
-      console.log('No cached data, reading from file...')
-      data = await getExcelData(excelFile.value, sheetName.value)
-      setCachedExcelData(data) // Cache for next time
+      data = await getExcelData(excelFile.value, sheetName.value);
+      setCachedExcelData(data);
     }
 
     if (data.length === 0) {
-      throw new Error('No data found in the Excel sheet')
+      throw new Error("No data found in the Excel sheet");
     }
 
-    // Generate labels with ArrayBuffer directly
     const result = await labelGenerator.generateLabels(
       templateArrayBuffer,
-      data, // Use cached data
+      data,
       configuration.value,
-      (message) => updateProgress(message)
-    )
+      (message) => updateProgress(message),
+    );
 
-    // Save the file
-    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-')
-    await labelGenerator.saveDocument(result.data, `labels_${timestamp}.docx`)
+    const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, "-");
+    await labelGenerator.saveDocument(result.data, `labels_${timestamp}.docx`);
 
-    hideLoading()
-    displayOutput(
-      `✅ Success! Generated ${result.stats.pages} pages with ${result.stats.totalLabels} labels (${result.stats.itemsPerPage} per page)`,
-      'success'
-    )
+    hideLoading();
+    addMessage({
+      type: MESSAGE_TYPES.SUCCESS,
+      category: MESSAGE_CATEGORIES.GENERATION,
+      title: "Labels generated successfully!",
+      message: `Generated ${result.stats.pages} pages with ${result.stats.totalLabels} labels (${result.stats.itemsPerPage} per page)`,
+      key: "generation-success",
+    });
   } catch (error) {
-    hideLoading()
-    console.error('[ERROR] Generation failed:', error.message)
-    
-    // Handle file access errors specially
-    if (error.name === 'NotReadableError' || error.message?.includes('could not be read')) {
-      displayOutput(
-        `❌ Cannot read the file. This usually happens when:<br><br>
-        • The file is open in another application<br>
-        • The file was edited and needs to be re-uploaded<br>
-        • The cached file reference is stale<br><br>
-        💡 <strong>Solution:</strong> Please refresh this page and re-upload your files using the drop zones above.`,
-        'error'
-      )
-    } else {
-      displayOutput(`❌ Error: ${error.message}`, 'error')
-    }
+    hideLoading();
+    console.error("[ERROR] Generation failed:", error.message);
+
+    addMessage({
+      type: MESSAGE_TYPES.ERROR,
+      category: MESSAGE_CATEGORIES.GENERATION,
+      title: "Generation failed",
+      message: error.message,
+      key: "generation-error",
+    });
+    showMessageDrawer.value = true; // Auto-open drawer on error
   } finally {
-    isGenerating.value = false
+    isGenerating.value = false;
   }
-}
+};
+
+// Preview selected records
+const previewRecords = async () => {
+  try {
+    showLoading("Preparing preview...");
+
+    // Get template placeholders
+    const templateArrayBuffer = getStoredTemplateArrayBuffer();
+    if (templateArrayBuffer) {
+      templateColumns.value =
+        labelGenerator.extractTemplatePlaceholders(templateArrayBuffer);
+    } else {
+      templateColumns.value = [];
+    }
+
+    // Get data
+    let data = getCachedExcelData();
+    if (!data) {
+      data = await getExcelData(excelFile.value, sheetName.value);
+      setCachedExcelData(data);
+    }
+
+    if (data.length === 0) {
+      hideLoading();
+      addMessage({
+        type: MESSAGE_TYPES.WARNING,
+        category: MESSAGE_CATEGORIES.VALIDATION,
+        title: "No data found to preview",
+        suggestion: "Make sure your data file contains records.",
+        key: "preview-no-data",
+      });
+      return;
+    }
+
+    // Check for template placeholders that don't have matching data columns
+    if (templateColumns.value.length > 0) {
+      const dataColumns = Object.keys(data[0] || {});
+      const unmatchedPlaceholders = templateColumns.value.filter(
+        (placeholder) => !dataColumns.includes(placeholder),
+      );
+
+      if (unmatchedPlaceholders.length > 0) {
+        addMessage({
+          type: MESSAGE_TYPES.WARNING,
+          category: MESSAGE_CATEGORIES.VALIDATION,
+          title: "Template references columns not found in data",
+          items: unmatchedPlaceholders,
+          suggestion:
+            "These placeholders will be empty in the output. Check for typos or add the columns to your data.",
+          key: "preview-unmatched-columns",
+        });
+      } else {
+        // Clear the warning if all columns now match
+        removeMessageByKey("preview-unmatched-columns");
+      }
+    }
+
+    // Apply record selection
+    let selectedData = labelGenerator.applyRecordSelection(
+      data,
+      configuration.value,
+    );
+
+    // Apply sorting
+    selectedData = labelGenerator.applySorting(
+      selectedData,
+      configuration.value,
+    );
+
+    // Apply formatting for preview
+    const formattedData = formatDataForPreview(
+      selectedData,
+      configuration.value,
+    );
+
+    previewData.value = formattedData;
+    hideLoading();
+    showPreviewModal.value = true;
+  } catch (error) {
+    hideLoading();
+    console.error("Error preparing preview:", error);
+    addMessage({
+      type: MESSAGE_TYPES.ERROR,
+      category: MESSAGE_CATEGORIES.GENERATION,
+      title: "Failed to prepare preview",
+      message: error.message,
+      key: "preview-error",
+    });
+  }
+};
 
 // Handle configuration updates
 const handleConfigUpdate = (newConfig) => {
-  configuration.value = newConfig
-  saveConfiguration(newConfig)
-}
+  configuration.value = newConfig;
+  saveConfiguration(newConfig);
+};
 
-// Add validation summary
-const validationSummary = computed(() => {
-  if (!isReady.value) return null
-  
-  const issues = []
-  
-  // Check if duplicate column is selected when mode is 'column'
-  if (configuration.value.duplicates.mode === 'column' && !configuration.value.duplicates.column) {
-    issues.push('⚠️ Please select a duplicates column')
-  }
-  
-  // Check if date column is selected when mode is 'column'
-  if (configuration.value.formatting.date.mode === 'column' && !configuration.value.formatting.date.column) {
-    issues.push('⚠️ Please select a date column')
-  }
-  
-  // Check if geocoord columns are selected when mode is active
-  if (configuration.value.formatting.geocoord.mode === 'single' && !configuration.value.formatting.geocoord.singleColumn) {
-    issues.push('⚠️ Please select a geocoordinate column')
-  }
-  if (configuration.value.formatting.geocoord.mode === 'separate') {
-    if (!configuration.value.formatting.geocoord.latColumn || !configuration.value.formatting.geocoord.lonColumn) {
-      issues.push('⚠️ Please select both latitude and longitude columns')
+// Compute skipped rows based on duplicates configuration - now adds message
+watch(
+  () => {
+    if (!isReady.value) return null;
+    if (configuration.value.duplicates.mode !== "column") return null;
+    if (!configuration.value.duplicates.column) return null;
+
+    const data = getCachedExcelData();
+    if (!data || data.length === 0) return null;
+
+    const column = configuration.value.duplicates.column;
+    const addSubtract = configuration.value.duplicates.addSubtract || 0;
+
+    const skippedRows = [];
+    const selectedData = labelGenerator.applyRecordSelection(
+      data,
+      configuration.value,
+    );
+
+    selectedData.forEach((row) => {
+      const rawValue = row[column];
+      const columnValue =
+        rawValue === "" || rawValue === undefined || rawValue === null
+          ? 0
+          : parseInt(rawValue) || 0;
+      const copies = Math.max(0, columnValue + addSubtract);
+
+      if (copies === 0) {
+        const rowNum = row.__spreadsheetRow || "?";
+        skippedRows.push(rowNum);
+      }
+    });
+
+    return skippedRows;
+  },
+  (skippedRows) => {
+    // Clear previous skipped rows message
+    removeMessageByKey("skipped-rows-info");
+
+    if (skippedRows && skippedRows.length > 0) {
+      const rowsDisplay =
+        skippedRows.length <= 5
+          ? skippedRows.join(", ")
+          : `${skippedRows.slice(0, 5).join(", ")}... and ${skippedRows.length - 5} more`;
+
+      addMessage({
+        type: MESSAGE_TYPES.INFO,
+        category: MESSAGE_CATEGORIES.CONFIGURATION,
+        title: `${skippedRows.length} row${skippedRows.length > 1 ? "s" : ""} will be skipped`,
+        message: `Rows ${rowsDisplay} have 0 copies based on current settings.`,
+        key: "skipped-rows-info",
+      });
     }
-  }
-  
-  return issues.length > 0 ? issues : null
-})
+  },
+  { immediate: true },
+);
 
-// Add computed for total rows
-const totalDataRows = computed(() => {
-  return getCachedExcelData()?.length || 1
-})
+// Remove the old skippedRowsInfo computed - no longer needed
+// const skippedRowsInfo = computed(() => { ... })
+
+// Remove the old validationSummary computed - no longer needed (handled by watch on configuration)
+// const validationSummary = computed(() => { ... })
 
 // UI Helper functions
 const showLoading = (message, progress = 0) => {
-  loading.value = true
-  loadingMessage.value = message
-  loadingProgress.value = progress
-}
+  loading.value = true;
+  loadingMessage.value = message;
+  loadingProgress.value = progress;
+};
 
 const hideLoading = () => {
-  loading.value = false
-}
+  loading.value = false;
+};
 
 const updateProgress = (message, progress = 0) => {
-  loadingMessage.value = message
-  loadingProgress.value = progress
-}
+  loadingMessage.value = message;
+  loadingProgress.value = progress;
+};
 
-const displayOutput = (message, type = 'info') => {
-  outputMessage.value = message
-  outputType.value = type
-  showOutput.value = true
-}
+const formatFileSize = (bytes) => {
+  if (bytes === 0) return "0 Bytes";
+  const k = 1024;
+  const sizes = ["Bytes", "KB", "MB", "GB"];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i];
+};
 
-// Watch for ready state to show/hide options
-const watchReadyState = computed(() => isReady.value)
-if (watchReadyState) {
-  showOptions.value = true
-}
+// Handle file clears - also clear related messages
+const handleTemplateClear = async () => {
+  try {
+    setTemplateFile(null);
+    templateFilename.value = "";
+    templateFilesize.value = "";
+    isTemplateSaved.value = false;
+    await deleteFileFromIndexedDB("template");
+
+    // Clear template-related messages
+    removeMessageByKey("template-load-error");
+    removeMessageByKey("template-storage-warning");
+    removeMessageByKey("preview-unmatched-columns");
+    clearValidation();
+  } catch (error) {
+    console.error("Error clearing template:", error);
+  }
+};
+
+const handleExcelClear = async () => {
+  try {
+    setExcelFile(null);
+    excelFilename.value = "";
+    excelFilesize.value = "";
+    isExcelSaved.value = false;
+    selectedSheet.value = "";
+    setSheetName(null);
+    setHeaders([]);
+    setCachedExcelData(null);
+    availableSheets.value = [];
+    fileType.value = "";
+    await deleteFileFromIndexedDB("excel");
+    localStorage.removeItem("specimensLabeler_excelFileName");
+    localStorage.removeItem("specimensLabeler_sheetName");
+
+    // Clear data-related messages
+    removeMessageByKey("excel-load-error");
+    removeMessageByKey("excel-storage-warning");
+    removeMessageByKey("sheet-load-error");
+    removeMessageByKey("preview-no-data");
+    removeMessageByKey("skipped-rows-info");
+    clearValidation();
+  } catch (error) {
+    console.error("Error clearing Excel file:", error);
+  }
+};
+
+// Toggle help drawer
+const toggleHelpDrawer = () => {
+  showHelpDrawer.value = !showHelpDrawer.value;
+};
+
+// Open help drawer with template guide
+const showTemplateHelp = () => {
+  helpDrawerRef.value?.openWithTemplateGuide();
+};
+
+// Extract template columns when template is loaded
+const currentTemplateColumns = computed(() => {
+  const templateArrayBuffer = getStoredTemplateArrayBuffer();
+  if (templateArrayBuffer) {
+    return labelGenerator.extractTemplatePlaceholders(templateArrayBuffer);
+  }
+  return [];
+});
+
+// Watch for changes to trigger validation
+watch(
+  [currentTemplateColumns, headers],
+  ([placeholders, headerList]) => {
+    if (placeholders.length > 0 && headerList.length > 0) {
+      validatePlaceholders(placeholders, headerList);
+    } else {
+      clearValidation();
+    }
+  },
+  { immediate: true },
+);
+
+// Validation messages for configuration
+watch(
+  () => configuration.value,
+  (config) => {
+    // Clear previous config warnings
+    clearCategory(MESSAGE_CATEGORIES.CONFIGURATION);
+
+    // Check for configuration issues
+    if (isReady.value) {
+      if (config.duplicates.mode === "column" && !config.duplicates.column) {
+        addMessage({
+          type: MESSAGE_TYPES.WARNING,
+          category: MESSAGE_CATEGORIES.CONFIGURATION,
+          title: "Duplicates column not selected",
+          suggestion: "Select a column to determine the number of copies.",
+          key: "config-duplicates",
+        });
+      }
+
+      const dateColumns = config.formatting.date.columns || [];
+      if (
+        config.formatting.date.mode === "column" &&
+        dateColumns.length === 0
+      ) {
+        addMessage({
+          type: MESSAGE_TYPES.WARNING,
+          category: MESSAGE_CATEGORIES.CONFIGURATION,
+          title: "No date columns selected",
+          suggestion: "Select at least one date column to format.",
+          key: "config-date",
+        });
+      }
+
+      if (
+        config.formatting.geocoord.mode === "single" &&
+        !config.formatting.geocoord.singleColumn
+      ) {
+        addMessage({
+          type: MESSAGE_TYPES.WARNING,
+          category: MESSAGE_CATEGORIES.CONFIGURATION,
+          title: "Geocoordinate column not selected",
+          suggestion: "Select a column containing coordinates.",
+          key: "config-geocoord",
+        });
+      }
+
+      if (config.formatting.geocoord.mode === "separate") {
+        if (
+          !config.formatting.geocoord.latColumn ||
+          !config.formatting.geocoord.lonColumn
+        ) {
+          addMessage({
+            type: MESSAGE_TYPES.WARNING,
+            category: MESSAGE_CATEGORIES.CONFIGURATION,
+            title: "Lat/Lon columns not selected",
+            suggestion: "Select both latitude and longitude columns.",
+            key: "config-geocoord-separate",
+          });
+        }
+      }
+    }
+  },
+  { deep: true },
+);
 
 // Initialize on mount
 onMounted(async () => {
-  // 🆕 Initialize storage (cleanup legacy data)
-  await initializeStorage()
-  
-  loadConfiguration()
+  await initializeStorage();
+  loadConfiguration();
 
-  // Load stored template if exists
-  const storedTemplateData = await loadStoredTemplate()
+  const storedTemplateData = await loadStoredTemplate();
   if (storedTemplateData) {
-    const file = useStoredTemplate()
+    const file = useStoredTemplate();
     if (file) {
-      setTemplateFile(file)
-      templateFilename.value = file.name
-      templateFilesize.value = formatFileSize(file.size)
-      isTemplateSaved.value = true
+      setTemplateFile(file);
+      templateFilename.value = file.name;
+      templateFilesize.value = formatFileSize(file.size);
+      isTemplateSaved.value = true;
     }
   }
 
-  // Load stored Excel file if exists
-  const storedExcelData = await loadStoredExcel()
+  const storedExcelData = await loadStoredExcel();
   if (storedExcelData) {
-    const file = useStoredExcel()
+    const file = useStoredExcel();
     if (file) {
       try {
-        await handleExcelFile(file)
+        await handleExcelFile(file);
       } catch (error) {
-        console.error('Failed to restore Excel file:', error)
+        console.error("Failed to restore Excel file:", error);
       }
     }
   }
-})
+});
 
-// Format file size helper
-const formatFileSize = (bytes) => {
-  if (bytes === 0) return '0 Bytes'
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
-}
-
-// Add computed property for collate option visibility
-const shouldShowCollateOption = computed(() => {
-  const mode = configuration.value.duplicates.mode
-  const fixed = configuration.value.duplicates.fixed
-  const column = configuration.value.duplicates.column
-  
-  return (mode === 'fixed' && fixed > 1) || (mode === 'column' && column !== '')
-})
-
-// Handle template file clear
-const handleTemplateClear = async () => {
-  try {
-    // Clear from state
-    setTemplateFile(null)
-    templateFilename.value = ''
-    templateFilesize.value = ''
-    isTemplateSaved.value = false
-    
-    // Clear from IndexedDB
-    await deleteFileFromIndexedDB('template')
-    
-    console.log('Template file cleared')
-  } catch (error) {
-    console.error('Error clearing template:', error)
-  }
-}
-
-// Handle Excel file clear
-const handleExcelClear = async () => {
-  try {
-    // Clear from state
-    setExcelFile(null)
-    excelFilename.value = ''
-    excelFilesize.value = ''
-    isExcelSaved.value = false
-    
-    // Clear sheet selection
-    selectedSheet.value = ''
-    setSheetName(null)
-    setHeaders([])
-    setCachedExcelData(null)
-    availableSheets.value = []
-    fileType.value = ''
-    
-    // Clear from IndexedDB
-    await deleteFileFromIndexedDB('excel')
-    
-    // Clear from localStorage
-    localStorage.removeItem('specimensLabeler_excelFileName')
-    localStorage.removeItem('specimensLabeler_sheetName')
-    
-    console.log('Excel file cleared')
-  } catch (error) {
-    console.error('Error clearing Excel file:', error)
-  }
-}
-
-// Add ref for template help
-const templateHelpRef = ref(null)
-
-const scrollToTemplateHelp = () => {
-  nextTick(() => {
-    if (templateHelpRef.value) {
-      // First open the examples section
-      templateHelpRef.value.openExamples()
-      
-      // Wait a bit for the section to expand
-      setTimeout(() => {
-        // Scroll to the help section
-        templateHelpRef.value.$el.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'start' 
-        })
-        
-        // Additional scroll adjustment to show the "How to Construct" heading
-        setTimeout(() => {
-          window.scrollBy({ 
-            top: 100, 
-            behavior: 'smooth' 
-          })
-        }, 300)
-      }, 100)
-    }
-  })
-}
+// Watch for message changes to auto-show/hide drawer
+watch(
+  hasMessages,
+  (hasAnyMessages) => {
+    showMessageDrawer.value = hasAnyMessages;
+  },
+  { immediate: true },
+);
 </script>
 
 <template>
-  <div class="app-container">
-    <div class="header">
-      <h1>🌿 Specimens Labeler</h1>
-    </div>
+  <v-app class="app-layout">
+    <!-- App Bar -->
+    <v-app-bar class="main-gradient" density="comfortable" elevation="2">
+      <v-app-bar-title class="font-weight-bold">
+        🌿 Specimens Labeler
+      </v-app-bar-title>
 
-    <!-- Output Messages -->
-    <OutputMessage
-      :show="showOutput"
-      :message="outputMessage"
-      :type="outputType"
-      @close="showOutput = false"
+      <v-spacer></v-spacer>
+
+      <!-- Message Indicator -->
+      <MessageIndicator @click="showMessageDrawer = true" class="mr-4" />
+
+      <v-btn
+        variant="outlined"
+        color="white"
+        @click="toggleHelpDrawer"
+        prepend-icon="mdi-book-open-variant"
+        class="mr-8"
+      >
+        User Guide
+      </v-btn>
+    </v-app-bar>
+
+    <!-- Help Drawer -->
+    <HelpDrawer ref="helpDrawerRef" v-model="showHelpDrawer" />
+
+    <!-- Message Drawer - now controlled by hasMessages -->
+    <MessageDrawer v-model="showMessageDrawer" />
+
+    <!-- Data Preview Modal -->
+    <DataPreviewModal
+      v-model="showPreviewModal"
+      :data="previewData"
+      :template-columns="templateColumns"
+      :all-headers="headers"
+      :duplicates-config="configuration.duplicates"
     />
 
-    <form @submit.prevent="generateLabels">
-      <div class="main-content-grid">
-        
-        <!-- Section 1: Files Block -->
-        <div class="section-block files-block">
-          <h2>Upload Files</h2>
-          <div class="files-content">
+    <!-- Main Content -->
+    <v-main class="main-content">
+      <div class="app-grid">
+        <!-- Left Column: File Uploads -->
+        <div class="input-zone">
+          <div class="zone-header">
+            <v-icon start>mdi-upload</v-icon>
+            Input Files
+          </div>
+
+          <div class="files-container">
             <FileDropZone
               heading="Template"
               text="Drop Word template here"
@@ -463,13 +714,13 @@ const scrollToTemplateHelp = () => {
               file-type="template"
               @file-selected="handleTemplateFile"
               @file-cleared="handleTemplateClear"
-              @show-template-help="scrollToTemplateHelp"
+              @show-template-help="showTemplateHelp"
             />
-            
+
             <FileDropZone
-              heading="Collection Spreadsheet"
-              text="Drop Excel or CSV file here"
-              subtext="or click to browse (.xlsx, .csv)"
+              heading="Data File"
+              text="Drop Excel or CSV here"
+              subtext="or click to browse"
               accept=".xlsx,.xls,.csv,.tsv"
               :filename="excelFilename"
               :file-size="excelFilesize"
@@ -481,78 +732,124 @@ const scrollToTemplateHelp = () => {
               <template #extra-content>
                 <div
                   v-if="availableSheets.length > 0 && fileType === 'excel'"
-                  class="sheet-selector-container"
-                  :class="{ 'no-sheet-selected': !selectedSheet }"
+                  class="sheet-selector mt-3"
                   @click.stop
                 >
-                  <label for="sheet-name">Select Sheet:</label>
-                  <select
-                    id="sheet-name"
+                  <v-select
                     v-model="selectedSheet"
-                    :class="{ 'invalid-selection': !selectedSheet }"
-                    @change="handleSheetSelection(selectedSheet)"
-                  >
-                    <option value="">Select a sheet...</option>
-                    <option v-for="sheet in availableSheets" :key="sheet" :value="sheet">
-                      {{ sheet }}
-                    </option>
-                  </select>
+                    :items="availableSheets"
+                    label="Select Sheet"
+                    :class="{ 'sheet-warning': !selectedSheet }"
+                    @update:model-value="handleSheetSelection(selectedSheet)"
+                    density="comfortable"
+                    bg-color="white"
+                    hide-details
+                  ></v-select>
                 </div>
-                
+
                 <div
                   v-if="fileType === 'csv' && excelFilename"
-                  class="csv-info"
+                  class="csv-ready mt-3"
                   @click.stop
                 >
-                  <span class="csv-badge">✓ CSV File - Ready to use</span>
+                  <v-chip color="success" variant="flat" size="small">
+                    <v-icon start size="small">mdi-check</v-icon>
+                    CSV Ready
+                  </v-chip>
                 </div>
               </template>
             </FileDropZone>
           </div>
         </div>
 
-        <!-- Section 2: Data Selection Block -->
-        <div v-if="isReady" class="section-block data-selection-block">
-          <DataSelectionSection
-            :config="configuration"
-            :headers="headers"
-            :total-rows="totalDataRows"
-            @update:config="handleConfigUpdate"
-          />
-        </div>
+        <!-- Right Column: Configuration & Generate -->
+        <div class="config-zone">
+          <!-- Configuration Area (scrollable) -->
+          <div class="config-scroll-area">
+            <template v-if="isReady">
+              <ConfigurationPanels
+                :config="configuration"
+                :headers="headers"
+                :total-rows="totalDataRows"
+                :template-columns="currentTemplateColumns"
+                @update:config="handleConfigUpdate"
+              />
+            </template>
 
-        <!-- Section 3: Configuration Block -->
-        <div v-if="isReady" class="section-block config-block">
-          <ConfigurationSection 
-            :config="configuration" 
-            :headers="headers" 
-            @update:config="handleConfigUpdate" 
-          />
-        </div>
-
-        <!-- Section 4: Generate Block -->
-        <div v-if="isReady" class="section-block generate-block">
-          <h2>Generate Labels</h2>
-          
-          <div v-if="validationSummary" class="validation-warnings">
-            <div v-for="(issue, index) in validationSummary" :key="index" class="validation-item">
-              {{ issue }}
-            </div>
+            <template v-else>
+              <v-card variant="tonal" class="pa-6 text-center">
+                <v-icon size="48" color="grey">mdi-arrow-left</v-icon>
+                <div class="text-h6 mt-4 text-grey">Upload Files to Begin</div>
+                <div class="text-body-2 text-grey mt-2">
+                  Drop your Word template and Excel/CSV data file in the left
+                  panel (select the sheet to work on if you uploaded an Excel spreadsheet)
+                </div>
+              </v-card>
+            </template>
           </div>
-          
-          <button
-            type="button"
-            class="generate-btn"
-            :disabled="!isReady || isGenerating"
-            @click="generateLabels"
-            :title="isReady ? 'Generate labels' : 'Please upload files first'"
-          >
-            {{ isGenerating ? 'Processing...' : 'Generate Labels' }}
-          </button>
-        </div>
 
+          <!-- Spacer -->
+          <div class="generate-spacer"></div>
+
+          <!-- Generate Button (fixed at bottom) -->
+          <div class="generate-section">
+            <v-card
+              :color="isReady ? '#6b77bf' : 'grey-lighten-1'"
+              class="generate-card"
+            >
+              <v-card-text class="pa-4">
+                <div class="d-flex ga-3">
+                  <v-btn
+                    size="large"
+                    :disabled="!isReady"
+                    @click="previewRecords"
+                    color="white"
+                    variant="outlined"
+                  >
+                    <v-icon start>mdi-table-eye</v-icon>
+                    Preview data
+                  </v-btn>
+
+                  <v-btn
+                    size="large"
+                    class="main-gradient flex-grow-1"
+                    :disabled="!isReady || isGenerating"
+                    @click="generateLabels"
+                    :color="isReady ? 'white' : 'grey-lighten-3'"
+                    :class="{ 'generate-btn-active': isReady }"
+                    elevation="2"
+                  >
+                    <v-icon start v-if="!isGenerating"
+                      >mdi-file-document-plus</v-icon
+                    >
+                    <v-progress-circular
+                      v-else
+                      indeterminate
+                      size="20"
+                      width="2"
+                      class="mr-2"
+                    ></v-progress-circular>
+                    {{ isGenerating ? "Generating..." : "Generate Labels" }}
+                  </v-btn>
+                </div>
+              </v-card-text>
+            </v-card>
+          </div>
+        </div>
       </div>
-    </form>
+
+      <!-- Footer -->
+      <div class="app-footer">
+        © 2025
+        <a
+          href="https://dominicweb.eu"
+          target="_blank"
+          rel="noopener noreferrer"
+          >Dominik M. Ramík</a
+        >
+        <span class="version">v{{ packageJson.version }}</span>
+      </div>
+    </v-main>
 
     <!-- Loading Overlay -->
     <LoadingOverlay
@@ -560,459 +857,176 @@ const scrollToTemplateHelp = () => {
       :message="loadingMessage"
       :progress="loadingProgress"
     />
-
-    <!-- How to Use Section -->
-    <HowToUse ref="templateHelpRef" />
-
-    <!-- Copyright -->
-    <div class="copyright">
-      © 2025
-      <a href="https://dominicweb.eu" target="_blank" rel="noopener noreferrer">Dominik M. Ramík</a>
-      <span class="version">v{{ packageJson.version }}</span>
-    </div>
-  </div>
+  </v-app>
 </template>
 
 <style scoped>
-.app-container {
-  font-family: system-ui, -apple-system, sans-serif;
-  min-height: 100vh;
-  background: #f5f5f5;
-  padding: 20px;
+.app-layout {
+  height: 100vh;
+  overflow: hidden;
 }
 
-.header {
-  text-align: center;
-  margin-bottom: 30px;
-}
-
-h1 {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  text-align: center;
-  margin: 0 0 0 0;
-  font-size: 2rem;
-  padding: 24px 24px 16px 24px;
-  border-radius: 12px 12px 0 0;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
-  letter-spacing: 0.5px;
-}
-
-.subtitle {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: rgba(255, 255, 255, 0.95);
-  margin: 0;
-  padding: 0 24px 20px 24px;
-  font-size: 1rem;
-  font-weight: 400;
-  letter-spacing: 0.3px;
-  border-radius: 0 0 12px 12px;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.3);
-  font-style: italic;
-}
-
-/* Four-column grid layout - equal width columns, no wrapping until breakpoint */
-.main-content-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 24px;
-  margin-bottom: 24px;
-  max-width: 1800px;
-  margin-left: auto;
-  margin-right: auto;
-  overflow-x: auto; /* Allow horizontal scroll if needed rather than wrapping */
-}
-
-/* Section block base styling */
-.section-block {
-  background: white;
-  border: none;
-  border-radius: 12px;
-  padding: 0;
+.main-content {
+  height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  min-height: 200px;
-  height: auto;
+  background: #f5f5f5;
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 0;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
-  align-self: start; /* 🔑 Prevent stretching to match tallest column */
 }
 
-.section-block h2 {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  margin: 0;
-  font-size: 18px;
-  font-weight: 700;
+/* Left Column - Input Zone */
+.input-zone {
+  background: white;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.zone-header {
   padding: 16px 20px;
-  border-bottom: none;
+  font-weight: 600;
+  font-size: 14px;
+  text-transform: uppercase;
   letter-spacing: 0.5px;
+  color: #4338ca;
+  border-bottom: 1px solid #e0e0e0;
+  background: #fafafa;
 }
 
-/* Files block specific */
-.files-block {
-  border: none;
-}
-
-.files-content {
-  padding: 20px;
+.files-container {
+  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  overflow-y: auto;
   flex: 1;
-  min-height: 0;
-  background: white;
 }
 
-/* Data Selection block specific */
-.data-selection-block {
-  background: white;
-  border: none;
-  padding: 0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  overflow: hidden;
+.sheet-selector {
+  width: 100%;
 }
 
-/* Config block specific */
-.config-block {
-  background: white;
-  border: none;
-  padding: 0;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
-  border-radius: 12px;
-  overflow: hidden;
+.sheet-selector :deep(.v-field.sheet-warning) {
+  border-color: #ff9800;
+  border-width: 2px;
 }
 
-/* Generate block specific */
-.generate-block {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
-  text-align: center;
-  box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
-  /* Removed height: fit-content to match other columns */
-}
-
-.generate-block h2 {
-  background: transparent;
-  color: white;
-  margin: 0;
-  padding: 16px 20px;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.2);
-}
-
-.sheet-selector-container {
+/* Right Column - Config Zone */
+.config-zone {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 8px;
-  backdrop-filter: blur(10px);
-  width: 100%;
-  transition: all 0.3s ease;
-}
-
-.sheet-selector-container label {
-  font-size: 0.9rem;
-  font-weight: 600;
-  color: white;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-}
-
-.sheet-selector-container select {
-  padding: 10px 12px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-  font-size: 14px;
-  background: white;
-  font-weight: 500;
-  color: #667eea;
-  cursor: pointer;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-/* Orange border when no sheet selected */
-.sheet-selector-container select.invalid-selection {
-  border-color: #ff9800;
-  border-width: 3px;
-  background: #fff8e1;
-  color: #e65100;
-  font-weight: 600;
-}
-
-.sheet-selector-container select:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-}
-
-.sheet-selector-container select:focus {
-  outline: none;
-  border-color: white;
-  box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
-}
-
-/* Override focus state when invalid */
-.sheet-selector-container select.invalid-selection:focus {
-  border-color: #ff9800;
-  box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.3);
-}
-
-.csv-info {
-  display: flex;
-  justify-content: center;
-  margin-top: 12px;
-  padding: 10px 14px;
-}
-
-.csv-badge {
-  font-size: 0.9rem;
-  color: white;
-  background: rgba(255, 255, 255, 0.25);
-  padding: 8px 16px;
-  border-radius: 20px;
-  font-weight: 600;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  letter-spacing: 0.3px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-}
-
-.generate-btn {
-  background: white;
-  color: #667eea;
-  padding: 14px 28px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 16px;
-  font-weight: 700;
-  transition: all 0.3s;
-  width: calc(100% - 40px);
-  margin: 20px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  letter-spacing: 0.5px;
-}
-
-.generate-btn:hover:not(:disabled) {
-  background: #f0f0f0;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-}
-
-.generate-btn:disabled {
-  background: rgba(255, 255, 255, 0.5);
-  color: rgba(102, 126, 234, 0.5);
-  cursor: not-allowed;
-  transform: none;
-}
-
-/* Validation warnings */
-.validation-warnings {
-  background: linear-gradient(135deg, #fff3cd 0%, #ffe8a1 100%);
-  border: 2px solid #ffc107;
-  border-radius: 8px;
-  padding: 14px 18px;
-  margin: 0 20px 15px 20px;
-  text-align: left;
-  box-shadow: 0 4px 12px rgba(255, 193, 7, 0.2);
-}
-
-.validation-item {
-  font-size: 0.9rem;
-  color: #856404;
-  margin-bottom: 8px;
-  line-height: 1.4;
-}
-
-.validation-item:last-child {
-  margin-bottom: 0;
-}
-
-.output {
-  position: relative;
-  margin: 0 auto 20px;
-  padding: 16px 48px 16px 20px;
-  border-radius: 12px;
-  border: none;
-  max-width: 1800px;
-  animation: slideDown 0.3s ease-out;
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-  font-weight: 500;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.output-close {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  background: rgba(255, 255, 255, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  border-radius: 6px;
-  font-size: 20px;
-  line-height: 1;
-  color: white;
-  cursor: pointer;
-  opacity: 0.9;
-  transition: all 0.2s;
-  padding: 4px 8px;
-  width: auto;
-  height: auto;
-}
-
-.output-close:hover {
-  opacity: 1;
-  background: rgba(255, 255, 255, 0.3);
-  transform: scale(1.1);
-}
-
-.output.success {
-  background: linear-gradient(135deg, #4caf50 0%, #2e7d32 100%);
-  color: white;
-}
-
-.output.error {
-  background: linear-gradient(135deg, #f44336 0%, #d32f2f 100%);
-  color: white;
-}
-
-.progress-bar {
-  margin-top: 15px;
   overflow: hidden;
-  border-radius: 4px;
-  background: #e0e0e0;
-  height: 8px;
-  width: 250px;
+  min-height: 0;
 }
 
-.progress-fill {
-  transition: width 0.3s ease;
-  background: linear-gradient(90deg, #2c5530 0%, #4CAF50 100%);
-  height: 100%;
+.output-message-container {
+  flex-shrink: 0;
+  padding: 16px 16px 0 16px;
 }
 
-.spinner {
-  margin: 0 auto 15px;
-  animation: spin 1s linear infinite;
-  border-radius: 50%;
-  border-top: 4px solid #2c5530;
-  border: 4px solid #f3f3f3;
-  height: 40px;
-  width: 40px;
+.output-message {
+  flex-shrink: 0;
+  margin: 16px 16px 0 16px;
 }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+.config-scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  min-height: 0;
 }
 
-.loading-content {
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+.generate-section {
+  flex-shrink: 0;
+  padding: 0 16px 16px 16px;
+}
+
+.generate-card {
   border-radius: 8px;
-  background: white;
-  padding: 30px;
-  text-align: center;
 }
 
-.loading-overlay {
-  z-index: 1000;
-  align-items: center;
-  justify-content: center;
-  display: flex;
-  background: rgba(255, 255, 255, 0.9);
-  height: 100%;
-  width: 100%;
-  left: 0;
-  top: 0;
-  position: fixed;
+.generate-btn-active {
+  color: #4338ca !important;
+  font-weight: 700;
 }
 
-.copyright {
-  margin-top: 30px;
+/* Spacer for Generate button */
+.generate-spacer {
+  flex-shrink: 0;
+  height: 16px;
+}
+
+/* Footer */
+.app-footer {
+  flex-shrink: 0;
   text-align: center;
-  font-size: 14px;
+  padding: 12px;
+  font-size: 12px;
   color: #666;
-  max-width: 1800px;
-  margin-left: auto;
-  margin-right: auto;
+  border-top: 1px solid #e0e0e0;
+  background: white;
 }
 
-.copyright a {
-  color: #667eea;
+.app-footer a {
+  color: #4338ca;
   text-decoration: none;
 }
 
-.copyright a:hover {
+.app-footer a:hover {
   text-decoration: underline;
 }
 
-.copyright .version {
+.version {
   margin-left: 8px;
   color: #999;
-  font-size: 12px;
-  font-weight: 500;
 }
 
-/* Tablet Layout (1200px to 1600px) - 3 columns */
-@media (max-width: 1600px) {
-  .main-content-grid {
-    grid-template-columns: 1fr 1fr 1fr;
-    grid-template-rows: auto auto;
-  }
-
-  .files-block {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .data-selection-block {
-    grid-column: 2;
-    grid-row: 1;
-  }
-
-  .config-block {
-    grid-column: 3;
-    grid-row: 1;
-  }
-
-  .generate-block {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-}
-
-/* Stack all columns vertically below 1200px */
-@media (max-width: 1200px) {
-  .main-content-grid {
+/* Responsive - Tablet and below */
+@media (max-width: 960px) {
+  .app-grid {
     grid-template-columns: 1fr;
-    gap: 16px;
-    overflow-x: visible; /* Reset overflow */
-  }
-
-  .files-block,
-  .data-selection-block,
-  .config-block,
-  .generate-block {
-    grid-column: 1;
-    grid-row: auto;
   }
 }
 
-/* Mobile adjustments for very small screens */
-@media (max-width: 768px) {
-  .app-container {
-    padding: 15px;
+/* Mobile */
+@media (max-width: 600px) {
+  .app-grid {
+    grid-template-rows: auto 1fr;
   }
+
+  .input-zone {
+    max-height: 50vh;
+  }
+
+  .files-container {
+    flex-direction: column;
+  }
+
+  .files-container > * {
+    min-width: 100%;
+  }
+}
+
+.preview-btn {
+  border-color: rgba(255, 255, 255, 0.5) !important;
+  color: white !important;
+}
+
+.preview-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+.main-gradient {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
 }
 </style>

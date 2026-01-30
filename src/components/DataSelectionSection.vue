@@ -1,155 +1,143 @@
 <template>
   <div class="data-selection-section">
-    <h3 class="data-selection-title">Data Selection</h3>
-    
-    <!-- Record Selection -->
-    <div class="selection-field">
-      <label class="field-label">Record Selection</label>
-      <div class="radio-group">
-        <label>
-          <input
-            type="radio"
-            value="all"
-            v-model="localConfig.recordSelection.mode"
-            @change="emitUpdate"
-          />
-          All Records
-        </label>
-        <label>
-          <input
-            type="radio"
-            value="from-to-end"
-            v-model="localConfig.recordSelection.mode"
-            @change="emitUpdate"
-          />
-          From Row
-          <input
-            type="number"
-            min="1"
-            :max="totalRows"
-            v-model.number="localConfig.recordSelection.startRow"
-            :disabled="localConfig.recordSelection.mode !== 'from-to-end'"
-            @change="handleStartRowChange"
-          />
-          to End
-        </label>
-        <label>
-          <input
-            type="radio"
-            value="from-to-row"
-            v-model="localConfig.recordSelection.mode"
-            @change="emitUpdate"
-          />
-          From Row
-          <input
-            type="number"
-            min="1"
-            :max="totalRows"
-            v-model.number="localConfig.recordSelection.startRow"
-            :disabled="localConfig.recordSelection.mode !== 'from-to-row'"
-            @change="handleStartRowChange"
-          />
-          to Row
-          <input
-            type="number"
-            :min="minEndRow"
-            :max="totalRows"
-            v-model.number="localConfig.recordSelection.endRow"
-            :disabled="localConfig.recordSelection.mode !== 'from-to-row'"
-            @change="handleEndRowChange"
-          />
-        </label>
-      </div>
-    </div>
+    <v-card>
+      <v-card-title class="data-selection-title">
+        Data Selection
+      </v-card-title>
+      
+      <v-card-text>
+        <!-- Record Selection -->
+        <div class="selection-field">
+          <v-label class="field-label mb-2">Record Selection</v-label>
+          <v-radio-group v-model="localConfig.recordSelection.mode" @update:model-value="emitUpdate" hide-details>
+            <v-radio label="All Records" value="all"></v-radio>
+            
+            <v-radio value="from-to-end">
+              <template v-slot:label>
+                <div class="d-flex align-center ga-2 flex-wrap">
+                  <span>From Row</span>
+                  <v-text-field
+                    v-model.number="localConfig.recordSelection.startRow"
+                    type="number"
+                    min="1"
+                    :max="totalRows"
+                    :disabled="localConfig.recordSelection.mode !== 'from-to-end'"
+                    @update:model-value="handleStartRowChange"
+                    hide-details
+                    density="compact"
+                    style="width: 80px"
+                    @click.stop
+                  ></v-text-field>
+                  <span>to End</span>
+                </div>
+              </template>
+            </v-radio>
+            
+            <v-radio value="from-to-row">
+              <template v-slot:label>
+                <div class="d-flex align-center ga-2 flex-wrap">
+                  <span>From Row</span>
+                  <v-text-field
+                    v-model.number="localConfig.recordSelection.startRow"
+                    type="number"
+                    min="1"
+                    :max="totalRows"
+                    :disabled="localConfig.recordSelection.mode !== 'from-to-row'"
+                    @update:model-value="handleStartRowChange"
+                    hide-details
+                    density="compact"
+                    style="width: 80px"
+                    @click.stop
+                  ></v-text-field>
+                  <span>to Row</span>
+                  <v-text-field
+                    v-model.number="localConfig.recordSelection.endRow"
+                    type="number"
+                    :min="minEndRow"
+                    :max="totalRows"
+                    :disabled="localConfig.recordSelection.mode !== 'from-to-row'"
+                    @update:model-value="handleEndRowChange"
+                    hide-details
+                    density="compact"
+                    style="width: 80px"
+                    @click.stop
+                  ></v-text-field>
+                </div>
+              </template>
+            </v-radio>
+          </v-radio-group>
+        </div>
 
-    <!-- Duplicates Handling -->
-    <div class="selection-field">
-      <label class="field-label">How many copies of each label to generate</label>
-      <div class="radio-group">
-        <label>
-          <input
-            type="radio"
-            value="column"
-            v-model="localConfig.duplicates.mode"
-            @change="emitUpdate"
-          />
-          Get from Column
-        </label>
-        
-        <div class="nested-controls">
-          <div class="nested-row">
-            <label for="duplicates-column">Column:</label>
-            <select
-              id="duplicates-column"
-              v-model="localConfig.duplicates.column"
-              :disabled="localConfig.duplicates.mode !== 'column'"
-              @change="emitUpdate"
-            >
-              <option value="">Select a column...</option>
-              <option v-for="header in headers" :key="header" :value="header">
-                {{ header }}
-              </option>
-            </select>
-            <label for="add-subtract" title="Add or subtract from the column value">+/-:</label>
-            <input
-              id="add-subtract"
-              type="number"
-              v-model.number="localConfig.duplicates.addSubtract"
-              placeholder="0"
-              @change="emitUpdate"
-            />
-          </div>
-          <div class="helper-text">
-            Example: If column value is 3 and +/- is -1, you'll get 2 copies
-          </div>
+        <v-divider class="my-4"></v-divider>
+
+        <!-- Duplicates Handling -->
+        <div class="selection-field">
+          <v-label class="field-label mb-2">How many copies of each label to generate</v-label>
+          <v-radio-group v-model="localConfig.duplicates.mode" @update:model-value="emitUpdate" hide-details>
+            <v-radio label="Get from Column" value="column"></v-radio>
+            
+            <div v-if="localConfig.duplicates.mode === 'column'" class="nested-controls ml-8 mt-2">
+              <div class="d-flex align-center ga-2">
+                <v-label>Column:</v-label>
+                <v-select
+                  v-model="localConfig.duplicates.column"
+                  :items="headers"
+                  :disabled="localConfig.duplicates.mode !== 'column'"
+                  @update:model-value="emitUpdate"
+                  placeholder="Select a column..."
+                  density="compact"
+                  hide-details
+                  class="flex-grow-1"
+                ></v-select>
+              </div>
+              <div class="d-flex align-center ga-2 mt-2">
+                <v-label title="Add or subtract from the column value">+/-:</v-label>
+                <v-text-field
+                  v-model.number="localConfig.duplicates.addSubtract"
+                  type="number"
+                  placeholder="0"
+                  @update:model-value="emitUpdate"
+                  hide-details
+                  density="compact"
+                  style="width: 80px"
+                ></v-text-field>
+              </div>
+              <v-alert type="info" density="compact" class="mt-2">
+                Example: If column value is 3 and +/- is -1, you'll get 2 copies
+              </v-alert>
+            </div>
+            
+            <v-radio value="fixed">
+              <template v-slot:label>
+                <div class="d-flex align-center ga-2">
+                  <span>Fixed Number</span>
+                  <v-text-field
+                    v-model.number="localConfig.duplicates.fixed"
+                    type="number"
+                    min="1"
+                    :disabled="localConfig.duplicates.mode !== 'fixed'"
+                    @update:model-value="emitUpdate"
+                    hide-details
+                    density="compact"
+                    style="width: 80px"
+                    @click.stop
+                  ></v-text-field>
+                </div>
+              </template>
+            </v-radio>
+            
+            <!-- Collate option -->
+            <v-card v-if="shouldShowCollateOption" variant="outlined" class="mt-3 pa-3">
+              <v-label class="font-weight-bold mb-2">Order:</v-label>
+              <v-radio-group v-model="localConfig.duplicates.collate" @update:model-value="emitUpdate" hide-details>
+                <v-radio label="Sets Together (A,B,C,A,B,C)" value="collated"></v-radio>
+                <v-radio label="Duplicates Together (A,A,A,B,B,B)" value="uncollated"></v-radio>
+              </v-radio-group>
+            </v-card>
+          </v-radio-group>
         </div>
-        
-        <label>
-          <input
-            type="radio"
-            value="fixed"
-            v-model="localConfig.duplicates.mode"
-            @change="emitUpdate"
-          />
-          Fixed Number
-          <input
-            type="number"
-            min="1"
-            v-model.number="localConfig.duplicates.fixed"
-            :disabled="localConfig.duplicates.mode !== 'fixed'"
-            @change="emitUpdate"
-          />
-        </label>
-        
-        <!-- Collate option -->
-        <div 
-          v-if="shouldShowCollateOption" 
-          class="collate-option"
-        >
-          <label class="collate-label">Order:</label>
-          <div class="radio-group-inline">
-            <label>
-              <input
-                type="radio"
-                value="collated"
-                v-model="localConfig.duplicates.collate"
-                @change="emitUpdate"
-              />
-              Sets Together (A,B,C,A,B,C)
-            </label>
-            <label>
-              <input
-                type="radio"
-                value="uncollated"
-                v-model="localConfig.duplicates.collate"
-                @change="emitUpdate"
-              />
-              Duplicates Together (A,A,A,B,B,B)
-            </label>
-          </div>
-        </div>
-      </div>
-    </div>
+      </v-card-text>
+    </v-card>
   </div>
 </template>
 
@@ -281,33 +269,23 @@ const emitUpdate = () => {
 
 <style scoped>
 .data-selection-section {
-  background: white;
-  border: none;
-  border-radius: 0;
-  padding: 0;
-  margin: 0;
-  margin-top: 0 !important;
+  height: 100%;
 }
 
 .data-selection-title {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  margin: 0;
+  color: white !important;
   font-size: 18px;
   font-weight: 700;
-  padding: 16px 20px;
-  border-bottom: none;
   letter-spacing: 0.5px;
 }
 
 .selection-field {
-  margin-bottom: 0;
-  padding: 20px;
-  border-bottom: 1px solid #f0f0f0;
+  margin-bottom: 16px;
 }
 
 .selection-field:last-child {
-  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .field-label {
@@ -315,123 +293,11 @@ const emitUpdate = () => {
   font-size: 14px;
   font-weight: 500;
   color: #333;
-  margin-bottom: 8px;
-}
-
-.radio-group {
-  background: white;
-  padding: 12px;
-  border-radius: 4px;
-  border: 1px solid #e2e8f0;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.radio-group label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 14px;
-  cursor: pointer;
-  font-weight: normal;
-  margin-bottom: 0;
-}
-
-.radio-group input[type='radio'] {
-  accent-color: #667eea;
-  cursor: pointer;
-  width: 16px;
-  height: 16px;
-}
-
-.radio-group input[type='number'] {
-  width: 80px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-#add-subtract {
-  width: 60px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
 }
 
 .nested-controls {
-  margin-left: 24px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.nested-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.nested-row label {
-  font-size: 14px;
-  color: #555;
-  margin: 0;
-  font-weight: 500;
-}
-
-.nested-row select {
-  flex: 1;
-  min-width: 150px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-}
-
-.helper-text {
-  margin-top: 6px;
-  margin-left: 0;
-  font-size: 13px;
-  color: #666;
-  font-style: italic;
-  padding: 8px 10px;
-  background: #f0f4ff;
-  border-radius: 4px;
-  border-left: 2px solid #667eea;
-}
-
-.collate-option {
-  margin-top: 12px;
-  margin-left: 0;
+  background: #f5f5f5;
   padding: 12px;
-  background: white;
   border-radius: 4px;
-  border: 1px solid #ddd;
-}
-
-.collate-label {
-  display: block;
-  font-weight: 500;
-  margin-bottom: 8px;
-  color: #333;
-  font-size: 14px;
-}
-
-.radio-group-inline {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.radio-group-inline label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: normal;
-  margin-bottom: 0;
-  font-size: 14px;
 }
 </style>

@@ -438,6 +438,55 @@ export class LabelGenerator {
     return pages
   }
 
+  /**
+   * Extract placeholder column names from a template
+   * @param {ArrayBuffer} templateArrayBuffer - The template file
+   * @returns {string[]} - Array of unique column names found in placeholders
+   */
+  extractTemplatePlaceholders(templateArrayBuffer) {
+    try {
+      const zip = new PizZip(templateArrayBuffer)
+      let xmlContent = zip.files['word/document.xml']?.asText()
+
+      if (!xmlContent) {
+        return []
+      }
+
+      // Defragment placeholders first
+      xmlContent = this.defragmentPlaceholders(xmlContent)
+      
+      // Extract text content
+      const textContent = this.extractTextFromXml(xmlContent)
+      
+      // Match all placeholders, excluding special tags
+      const placeholderPattern = /\{([^}:][^}]*)\}/g
+      const matches = [...textContent.matchAll(placeholderPattern)]
+      
+      const columns = new Set()
+      
+      matches.forEach((match) => {
+        const tagContent = match[1].trim()
+        
+        // Skip loop tags and special docxtemplater syntax
+        if (tagContent.startsWith('#') || 
+            tagContent.startsWith('/') ||
+            tagContent.startsWith('@') ||
+            tagContent.startsWith('.') ||
+            tagContent === 'pages' ||
+            tagContent === ':next') {
+          return
+        }
+        
+        columns.add(tagContent)
+      })
+      
+      return Array.from(columns)
+    } catch (error) {
+      console.error('Error extracting placeholders:', error)
+      return []
+    }
+  }
+
   async validateTemplate(templateArrayBuffer, data) {
     if (data.length === 0) {
       throw new Error('No data to validate against')
@@ -757,18 +806,26 @@ export class LabelGenerator {
   }
 
   applyRecordSelection(data, config) {
-    const { mode, startRow, endRow } = config.recordSelection
-
-    switch (mode) {
-      case 'all':
-        return data
-      case 'from-to-end':
-        return data.slice(startRow - 1)
-      case 'from-to-row':
-        return data.slice(startRow - 1, endRow)
-      default:
-        return data
-    }
+    const { startRow = 1, endRow } = config.recordSelection
+    
+    // Use endRow if provided, otherwise use all records
+    const effectiveEndRow = endRow || data.length
+    
+    const selected = data.slice(startRow - 1, effectiveEndRow)
+    
+    // Preserve __spreadsheetRow property
+    return selected.map(row => {
+      const newRow = { ...row }
+      if (row.__spreadsheetRow !== undefined) {
+        Object.defineProperty(newRow, '__spreadsheetRow', {
+          value: row.__spreadsheetRow,
+          enumerable: false,
+          writable: false,
+          configurable: true
+        })
+      }
+      return newRow
+    })
   }
 
   async applyDuplicatesHandling(data, config, progressCallback) {
@@ -782,22 +839,37 @@ export class LabelGenerator {
         let duplicateCount = 1
 
         if (mode === 'column') {
-          if (column && row[column]) {
-            const columnValue = parseInt(row[column]) || 1
-            duplicateCount = Math.max(1, columnValue + addSubtract)
+          if (column) {
+            const rawValue = row[column]
+            // Handle empty, undefined, or non-numeric values
+            const columnValue = (rawValue === '' || rawValue === undefined || rawValue === null) 
+              ? 0 
+              : (parseInt(rawValue) || 0)
+            duplicateCount = columnValue + (addSubtract || 0)
+            // Allow 0 copies (skip row), but not negative
+            duplicateCount = Math.max(0, duplicateCount)
           }
         } else if (mode === 'fixed') {
-          duplicateCount = fixed
+          duplicateCount = Math.max(0, fixed || 1)
         }
 
         if (duplicateCount > VALIDATION_LIMITS.MAX_DUPLICATE_COUNT) {
           console.warn(`⚠️ Row ${i} has duplicate count of ${duplicateCount} - this seems high`)
         }
-        
-        if (duplicateCount < 1) duplicateCount = 1
 
+        // Only add copies if duplicateCount > 0
         for (let j = 0; j < duplicateCount; j++) {
-          result.push({ ...row })
+          const duplicate = { ...row }
+          // Preserve __spreadsheetRow
+          if (row.__spreadsheetRow !== undefined) {
+            Object.defineProperty(duplicate, '__spreadsheetRow', {
+              value: row.__spreadsheetRow,
+              enumerable: false,
+              writable: false,
+              configurable: true
+            })
+          }
+          result.push(duplicate)
         }
 
         if (i % PROGRESS_UPDATE.FREQUENCY === 0) {
@@ -815,15 +887,20 @@ export class LabelGenerator {
         let duplicateCount = 1
 
         if (mode === 'column') {
-          if (column && row[column]) {
-            const columnValue = parseInt(row[column]) || 1
-            duplicateCount = Math.max(1, columnValue + addSubtract)
+          if (column) {
+            const rawValue = row[column]
+            // Handle empty, undefined, or non-numeric values
+            const columnValue = (rawValue === '' || rawValue === undefined || rawValue === null) 
+              ? 0 
+              : (parseInt(rawValue) || 0)
+            duplicateCount = columnValue + (addSubtract || 0)
+            // Allow 0 copies (skip row), but not negative
+            duplicateCount = Math.max(0, duplicateCount)
           }
         } else if (mode === 'fixed') {
-          duplicateCount = fixed
+          duplicateCount = Math.max(0, fixed || 1)
         }
 
-        if (duplicateCount < 1) duplicateCount = 1
         if (duplicateCount > VALIDATION_LIMITS.MAX_DUPLICATE_COUNT) {
           console.warn(`⚠️ Row ${i} has duplicate count of ${duplicateCount} - this seems high`)
         }
@@ -835,7 +912,17 @@ export class LabelGenerator {
       for (let copyNum = 0; copyNum < maxCopies; copyNum++) {
         for (let i = 0; i < data.length; i++) {
           if (copyNum < recordCounts[i]) {
-            result.push({ ...data[i], __setNumber: i + 1, __copyNumber: copyNum + 1 })
+            const duplicate = { ...data[i], __setNumber: i + 1, __copyNumber: copyNum + 1 }
+            // Preserve __spreadsheetRow
+            if (data[i].__spreadsheetRow !== undefined) {
+              Object.defineProperty(duplicate, '__spreadsheetRow', {
+                value: data[i].__spreadsheetRow,
+                enumerable: false,
+                writable: false,
+                configurable: true
+              })
+            }
+            result.push(duplicate)
           }
         }
         

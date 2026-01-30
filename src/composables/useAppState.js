@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue'
 
 const templateFile = ref(null)
+const templateBuffer = ref(null) // 🆕 Store template ArrayBuffer for validation
 const excelFile = ref(null)
 const sheetName = ref(null)
 const headers = ref([])
@@ -10,6 +11,11 @@ const cachedExcelData = ref(null) // 🆕 Cache parsed Excel data
 export function useAppState() {
   const setTemplateFile = (file) => {
     templateFile.value = file
+  }
+
+  // 🆕 Store template buffer for placeholder extraction
+  const setTemplateBuffer = (buffer) => {
+    templateBuffer.value = buffer
   }
 
   const setExcelFile = (file) => {
@@ -48,11 +54,14 @@ export function useAppState() {
 
   return {
     templateFile,
+    templateBuffer, // 🆕
     excelFile,
     sheetName,
     headers,
     data,
     setTemplateFile,
+    cachedExcelData,
+    setTemplateBuffer, // 🆕
     setExcelFile,
     setSheetName,
     setHeaders,
