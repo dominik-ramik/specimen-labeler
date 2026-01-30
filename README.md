@@ -1,138 +1,47 @@
 # 🌿 Specimen Labeler
 
-A web application for automatically generating formatted specimen labels from Excel/CSV data using Word document templates.
+The **Specimen Labeler** is a web-based tool designed to automatically generate formatted specimen labels from your Excel spreadsheet or CSV data using a Word document template.
 
-## Overview
+This application works entirely in your browser (no data is sent to a server) and unlike standard mail merge tools, offers specialized features for scientific and collection management needs.
 
-The Specimen Labeler streamlines the process of creating multiple specimen labels by:
-- Reading data from Excel spreadsheets (.xlsx, .xls) or CSV files (.csv, .tsv)
-- Applying consistent formatting (dates with international locales, decimals, coordinates)
-- Handling intelligent duplicate label generation with collation options
-- Populating Word document templates with a simple cursor-based placeholder system
-- Generating ready-to-print label documents
+## Features
 
-Perfect for herbaria, museums, research institutions, and anyone needing to generate large batches of formatted labels efficiently.
-
-## Key Features
-
-### 📅 International Date Formatting
-Convert dates to various scientific formats with **15+ language support**:
-- **Full month names**: January 26, 2025 (English) • Janvier 26, 2025 (French) • Januar 26, 2025 (German)
-- **Three-letter months**: Jan 26, 2025 (English) • janv. 26, 2025 (French) • Jan 26, 2025 (German)
-- **Roman numerals**: 26-I-2025 (language-independent, perfect for international collections)
-- **ISO standard**: 2025-01-26 (unambiguous international format)
-- **Uppercase short**: 26 JAN 2025 (English) • 26 JANV 2025 (French)
-
-**Supported locales**: English, Czech, German, Spanish, French, Italian, Polish, Portuguese, Russian, Chinese, Japanese, Korean, Arabic, Hindi
-
-### 🌍 Coordinate Transformation
-Parse and convert geographic coordinates between formats automatically:
-- **Input formats**: DMS (40°42'46.3"N), Decimal+direction (40.712778N), Signed decimal (-74.006000), Coordinate pairs (40.7128 -74.0060)
-- **Output formats**: DMS, Decimal with direction, Signed decimal
-- **Smart detection**: Automatically recognizes coordinate formats and direction indicators (N/S/E/W)
-- **Decimal format support**: Respects your decimal separator preference (dot vs. comma)
-
-### 🔄 Intelligent Duplicate Handling
-- **Column-based**: Generate copies based on a spreadsheet column value (e.g., "# of specimens")
-- **Fixed count**: Create the same number of copies for all records (e.g., 3 copies of everything)
-- **Adjustment**: Add or subtract from column values (+/- modifier)
-- **Collation options**:
-  - *Collated*: Interleave copies (Label1, Label2, Label3, Label1, Label2, Label3...) — easier for manual sorting
-  - *Uncollated*: Group copies together (Label1, Label1, Label1, Label2, Label2, Label2...) — faster for automated processes
-
-### 📊 Data Sorting
-Sort your data before label generation:
-- **Multi-level sorting**: Sort by multiple columns (e.g., Location, then Date)
-- **Flexible order**: Ascending or descending for each column
-- **Smart comparison**: Handles text, numbers, and dates automatically
-- **Empty value handling**: Blank cells sort to the end
-
-### 📋 Flexible Record Selection
-- Process all records from your spreadsheet
-- Start from a specific row to the end (e.g., skip headers or process from row 10)
-- Process a specific row range (e.g., rows 25-100)
-
-### 💾 Browser Storage
-- Files stored locally in IndexedDB for quick reuse
-- Configuration settings automatically saved in localStorage
-- No data leaves your browser — complete privacy
-
-### 📄 Multiple Labels Per Page
-- Automatically detects template layout (1, 2, 4, 6, 8+ labels per page)
-- Uses numbered placeholders: `{ColumnName#1}`, `{ColumnName#2}`, etc.
-- Flexible: Mix simple `{ColumnName}` and numbered formats in same template
+* **Intelligent Duplicate Handling**: Generate multiple copies of a label based on specific column values (e.g., a "Count" column) or a fixed number.
+* **Smart Date Formatting**: Automatically detect and convert dates to standard formats (e.g., ISO, Day-Month-Year).
+* **Coordinate Transformation**: Parse and convert geographic coordinates between formats (e.g., DMS to Decimal Degrees).
+* **Browser Storage**: Files are saved locally in your browser for quick reuse in future sessions.
 
 ## How to Use
 
-### 1. Prepare Your Word Template
+### 1. Prepare your Word Template
+Create a Microsoft Word (`.docx`) file to serve as your label layout. You can place one or many individual labels on a page and even print different types of labels for the same specimen side-by-side.
+* Use placeholders wrapped in curly braces that match your spreadsheet column headers.
+* **Example**: If your spreadsheet has a column named "Species", use `{Species}` in the Word document where you want that text to appear.
+* **Multiple Labels per Page**: If you want multiple labels on a single page, design the page with a table or text boxes. Use the special tag `{:next}` to tell the generator where the next record/label begins.
 
-Create a `.docx` file with simple placeholders that match your spreadsheet columns:
+### 2. Prepare your Spreadsheet
+Organize your data in Excel (`.xlsx`), CSV, or TSV format.
+* The first row must contain column headers.
+* Ensure these headers match the placeholders in your Word template exactly (e.g., "Plant Name" vs "plant_name").
 
-#### Simple Cursor-Based Syntax
+### 3. Upload Files
+Drag and drop your prepared Template (`.docx`) and Data file (`.xlsx`/`.csv`) into the application's "Input Files" zone. To save your time, the files will be remembered by your browser (locally stored) for your next visit.
 
-The app uses an intuitive cursor-based system — much simpler than traditional mail merge:
+### 4. Configure Options
+Use the configuration panels to customize the output:
+* **Record Selection**: Choose a specific range of rows to process (e.g., rows 1-10) or process the entire dataset.
+* **Label Copies**:
+    * *Fixed*: Print X copies of every label.
+    * *Column*: Use a value from a specific column (e.g., "Duplicates") to determine how many labels to print for that record. You can even apply an offset (e.g., Column Value - 1).
+* **Formatting**: Select your preferred output format for numbers, dates and geocoordinates.
 
-1. **Placeholders**: Use your column names in curly braces
-   - Example: `{Plant Name}`, `{Location}`, `{Date Collected}`
-   - **Important**: Column names must match exactly (case-sensitive!)
+### 5. Generate
+Click the **Generate Labels** button. The application will process your data and immediately download a new Word document containing all your generated labels.
 
-2. **Cursor advancement**: Use `{:next}` to move to the next record
-   - All placeholders *before* the first `{:next}` refer to record #1
-   - All placeholders *after* `{:next}` refer to record #2, and so on
-   - Omit `{:next}` between labels to print the same record multiple times (useful for paired labels)
+## Supported Formats
 
-3. **Automatic features**: The app handles these automatically:
-   - Page loop wrapping
-   - Page breaks between pages
-   - Data chunking and pagination
-
-#### Example Templates
-
-**Single label per page:**
-```
-Plant: {Plant Name}
-Location: {Location}
-Date: {Date Collected}
-```
-(No `{:next}` needed — the app generates one page per record)
-
-**Four labels per page (2×2 grid):**
-```
-┌─────────────────────────┬─────────────────────────┐
-│ Plant: {Plant Name}     │ {:next}                 │
-│ Location: {Location}    │ Plant: {Plant Name}     │
-│ Date: {Date Collected}  │ Location: {Location}    │
-│                         │ Date: {Date Collected}  │
-├─────────────────────────┼─────────────────────────┤
-│ {:next}                 │ {:next}                 │
-│ Plant: {Plant Name}     │ Plant: {Plant Name}     │
-│ Location: {Location}    │ Location: {Location}    │
-│ Date: {Date Collected}  │ Date: {Date Collected}  │
-└─────────────────────────┴─────────────────────────┘
-```
-
-**Paired labels (same record in two formats):**
-
-Useful when you need a small label for vials AND a detailed label for containers:
-
-```
-┌──────────────────┬──────────────────────────────────────┐
-│ {Species}        │ Museum Collection                    │
-│ {Location}       │ Species: {Species}                   │
-│                  │ Location: {Location}                 │
-│ (small label)    │ GPS: {Coordinates}                   │
-│                  │ Collector: {Collector}               │
-│                  │ (detailed label)                     │
-├──────────────────┴──────────────────────────────────────┤
-│ {:next}                                                 │
-├──────────────────┬──────────────────────────────────────┤
-│ {Species}        │ Museum Collection                    │
-│ {Location}       │ Species: {Species}                   │
-│                  │ Location: {Location}                 │
-│ (small label)    │ GPS: {Coordinates}                   │
-│                  │ Collector: {Collector}               │
-│                  │ (detailed label)                     │
-└──────────────────┴──────────────────────────────────────┘
-```
-
-Notice: No `{:next}` between the small and detailed label — they use the same record. The `{:next}` only appears between record pairs.
+* **Templates**: Microsoft Word `.docx` (Word 2007+)
+* **Data**:
+    * Excel `.xlsx`
+    * Comma Separated Values `.csv`
+    * Tab Separated Values `.tsv`
