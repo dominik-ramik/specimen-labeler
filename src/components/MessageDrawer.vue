@@ -21,16 +21,6 @@
           {{ infoCount }}
         </v-chip>
       </div>
-      <v-btn
-        v-if="hasMessages"
-        variant="text"
-        size="small"
-        color="grey"
-        @click="clearAll"
-        class="mt-2"
-      >
-        Clear All
-      </v-btn>
     </div>
 
     <v-divider></v-divider>
