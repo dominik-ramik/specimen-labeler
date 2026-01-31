@@ -45,3 +45,10 @@ Click the **Generate Labels** button. The application will process your data and
     * Excel `.xlsx`
     * Comma Separated Values `.csv`
     * Tab Separated Values `.tsv`
+
+## About
+
+**Author**: Dominik M. Ramík
+**Website**: https://dominicweb.eu
+
+This tool was originally developed for the research program **Plants and People of Vanuatu**: https://pvnh.net/plants-and-people-of-vanuatu/
