@@ -22,7 +22,6 @@ export class LabelGenerator {
 
     // Extract the full text to find all placeholders and count {:next} tags
     const textContent = this.extractTextFromXml(processedXml)
-    console.log('[PREPROCESS] Extracted text content:', textContent.substring(0, 500))
 
     // Count {:next} tags to determine items per page
     const nextMatches = textContent.match(/\{:next\}/g) || []
@@ -644,21 +643,14 @@ export class LabelGenerator {
         throw new Error('Invalid Word template format')
       }
 
-      console.log('[DEBUG] Original XML sample:', xmlContent.substring(0, 2000))
-
       // Get headers from data for preprocessing
       const headers = data.length > 0 ? Object.keys(data[0]) : []
 
       // Step 1: Preprocess placeholders (transform {genus} to {items[0]['genus']})
       const { processedXml, itemsPerPage } = this.preprocessTemplate(xmlContent, headers)
 
-      console.log(`[DEBUG] Detected ${itemsPerPage} items per page from template`)
-      console.log('[DEBUG] Processed XML sample:', processedXml.substring(0, 2000))
-
       // Step 2: Wrap with pages loop
       const finalXml = this.wrapWithPagesLoop(processedXml)
-
-      console.log('[DEBUG] Final XML with loop:', finalXml.substring(0, 3000))
 
       // Save processed XML back to zip
       zip.file('word/document.xml', finalXml)
@@ -667,9 +659,7 @@ export class LabelGenerator {
       const pages = this.chunkData(duplicatedData, itemsPerPage)
 
       const totalPages = pages.length
-      console.log(`[DEBUG] Will generate ${totalPages} pages (${duplicatedData.length} labels ÷ ${itemsPerPage} per page)`)
-      console.log('[DEBUG] Sample page data:', JSON.stringify(pages[0], null, 2))
-
+  
       // VALIDATION: Check if page count is reasonable
       if (totalPages > VALIDATION_LIMITS.MAX_PAGE_COUNT) {
         throw new Error(
@@ -693,19 +683,12 @@ export class LabelGenerator {
       progressCallback?.(`Rendering document (${totalPages} pages)...`)
 
       try {
-        console.log('[DEBUG] Rendering with data structure:', {
-          pagesCount: pages.length,
-          itemsPerPage,
-          samplePageKeys: pages[0] ? Object.keys(pages[0]) : [],
-          sampleItemKeys: pages[0]?.items?.[0] ? Object.keys(pages[0].items[0]) : []
-        })
 
         doc.render({ pages })
 
         // Verify rendering worked
         const renderedText = doc.getFullText()
-        console.log('[DEBUG] Rendered template sample (first 500 chars):', renderedText.substring(0, 500))
-
+      
         // Check for unresolved placeholders
         const remainingPlaceholders = renderedText.match(/\{[^}]+\}/g)
         if (remainingPlaceholders && remainingPlaceholders.length > 0) {

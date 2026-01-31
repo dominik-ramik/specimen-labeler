@@ -58,8 +58,6 @@ export function useMessages() {
     messages.value.push(newMessage)
     isDrawerOpen.value = true
 
-    console.log("Message received:", newMessage)
-
     return id
   }
 
