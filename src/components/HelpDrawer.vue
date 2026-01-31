@@ -9,7 +9,7 @@
     :rail="false"
     :touchless="true"
   >
-    <v-toolbar color="#4338ca" density="compact">
+    <v-toolbar color="#677de9" density="compact">
       <v-toolbar-title class="text-white font-weight-bold">
         <v-icon start>mdi-book-open-variant</v-icon>
         Help & Documentation

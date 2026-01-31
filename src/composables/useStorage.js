@@ -34,7 +34,6 @@ const defaultConfig = {
     date: {
       mode: 'none',
       columns: [],        // Changed from 'column' to 'columns' array
-      column: '',         // Keep for backwards compatibility
       format: 'roman',
       locale: 'en-US'
     },
@@ -59,15 +58,33 @@ const storedExcel = ref(null)
 // Debounce timer for auto-save
 let saveDebounceTimer = null
 
+// Utility: Deep merge two objects (simple version)
+function deepMerge(target, source) {
+  for (const key in source) {
+    if (
+      source[key] &&
+      typeof source[key] === "object" &&
+      !Array.isArray(source[key])
+    ) {
+      if (!target[key]) target[key] = {};
+      deepMerge(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  }
+  return target;
+}
+
 export function useStorage() {
   // Load configuration from localStorage
   const loadConfiguration = () => {
     try {
-      const stored = localStorage.getItem(CONFIG_KEY)
+      const stored = localStorage.getItem(`${STORAGE_PREFIX}configuration`)
       if (stored) {
         const parsed = JSON.parse(stored)
         // Deep merge with defaults to ensure all fields exist
-        configuration.value = deepMerge(defaultConfig, parsed)
+        // Instead of replacing the ref, update its properties
+        deepMerge(configuration.value, parsed)
         
         // Migration: convert old single column to array if needed
         if (configuration.value.formatting.date.column && 
