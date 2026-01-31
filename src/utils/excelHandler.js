@@ -216,7 +216,8 @@ export async function getExcelData(file, sheetName) {
 
       if (hasData) {
         consecutiveEmptyRows = 0
-        dataRows.push({ values: rowData, metadata: rowMetadata })
+        // Store the actual spreadsheet row number (1-based, +1 because row 0 is headers)
+        dataRows.push({ values: rowData, metadata: rowMetadata, spreadsheetRow: row + 1 })
       } else {
         consecutiveEmptyRows++
         if (consecutiveEmptyRows >= maxConsecutiveEmptyRows) {
@@ -242,7 +243,15 @@ export async function getExcelData(file, sheetName) {
           value: rowMeta,
           enumerable: false,
           writable: false,
-          configurable: true // 🆕 Changed from false to true - fixes Vue proxy issue
+          configurable: true
+        })
+        
+        // Attach spreadsheet row number (non-enumerable)
+        Object.defineProperty(rowData, '__spreadsheetRow', {
+          value: rowObj.spreadsheetRow,
+          enumerable: false,
+          writable: false,
+          configurable: true
         })
         
         return rowData

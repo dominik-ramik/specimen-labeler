@@ -43,3 +43,14 @@ export const GEOCOORD_FORMATS = {
   DECIMAL_DIRECTION: 'decimal-direction',
   DECIMAL_SIGNED: 'decimal-signed'
 }
+
+export const SORT_ORDER = {
+  ASCENDING: 'asc',
+  DESCENDING: 'desc'
+}
+
+export const SORTING_LIMITS = {
+  MAX_SORT_RULES: 5
+}
+
+// No changes needed - the constants file doesn't contain date column configuration

@@ -12,26 +12,30 @@ import {
 const STORAGE_PREFIX = 'specimensLabeler_'
 const DEBOUNCE_DELAY_MS = 500
 
-// Configuration state
-const configuration = ref({
+// Default configuration object
+const defaultConfig = {
   recordSelection: {
-    mode: 'all',
     startRow: 1,
-    endRow: 1000 // 🔧 Set reasonable default instead of 1
+    endRow: 100
   },
   duplicates: {
     mode: 'column',
     column: '',
     addSubtract: 0,
     fixed: 1,
-    collate: 'collated'
+    collate: 'uncollated'
   },
+  sorting: {
+    enabled: false,
+    rules: []
+  },
+  filters: [],
   formatting: {
     date: {
       mode: 'none',
-      column: '',
-      format: 'english',
-      locale: 'en-US' // 🆕 Simplified - just the locale code
+      columns: [],        // Changed from 'column' to 'columns' array
+      format: 'roman',
+      locale: 'en-US'
     },
     decimalFormat: 'dot',
     geocoord: {
@@ -42,7 +46,10 @@ const configuration = ref({
       outputFormat: 'dms'
     }
   }
-})
+}
+
+// Configuration state
+const configuration = ref(defaultConfig)
 
 // Template storage - store file data with ArrayBuffer
 const storedTemplate = ref(null)
@@ -51,36 +58,39 @@ const storedExcel = ref(null)
 // Debounce timer for auto-save
 let saveDebounceTimer = null
 
+// Utility: Deep merge two objects (simple version)
+function deepMerge(target, source) {
+  for (const key in source) {
+    if (
+      source[key] &&
+      typeof source[key] === "object" &&
+      !Array.isArray(source[key])
+    ) {
+      if (!target[key]) target[key] = {};
+      deepMerge(target[key], source[key]);
+    } else {
+      target[key] = source[key];
+    }
+  }
+  return target;
+}
+
 export function useStorage() {
   // Load configuration from localStorage
   const loadConfiguration = () => {
     try {
-      const saved = localStorage.getItem(`${STORAGE_PREFIX}configuration`)
-      if (saved) {
-        const parsed = JSON.parse(saved)
-        // Handle legacy dateFormat
-        if (parsed.formatting && !parsed.formatting.date) {
-          parsed.formatting.date = {
-            mode: 'none',
-            column: '',
-            format: parsed.formatting.dateFormat || 'english',
-            locale: 'en-US'
-          }
-          delete parsed.formatting.dateFormat
+      const stored = localStorage.getItem(`${STORAGE_PREFIX}configuration`)
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        // Deep merge with defaults to ensure all fields exist
+        // Instead of replacing the ref, update its properties
+        deepMerge(configuration.value, parsed)
+        
+        // Migration: convert old single column to array if needed
+        if (configuration.value.formatting.date.column && 
+            (!configuration.value.formatting.date.columns || configuration.value.formatting.date.columns.length === 0)) {
+          configuration.value.formatting.date.columns = [configuration.value.formatting.date.column]
         }
-        // 🆕 Remove legacy customLocale if it exists
-        if (parsed.formatting?.date) {
-          if (parsed.formatting.date.customLocale) {
-            delete parsed.formatting.date.customLocale
-          }
-          if (!parsed.formatting.date.locale) {
-            parsed.formatting.date.locale = 'en-US'
-          }
-        }
-        if (parsed.duplicates && !parsed.duplicates.collate) {
-          parsed.duplicates.collate = 'collated'
-        }
-        configuration.value = { ...configuration.value, ...parsed }
       }
     } catch (error) {
       console.warn('Failed to load configuration:', error)

@@ -202,9 +202,21 @@ function isLikelyDate(value, metadata = null) {
 function isLikelyDecimal(value) {
   if (!value || value.toString().trim() === '') return false
 
-  const str = value.toString()
+  const str = value.toString().trim()
 
-  return /^\d+[.,]\d+$/.test(str) || (!isNaN(parseFloat(str)) && parseFloat(str) % 1 !== 0)
+  // Don't treat date-like patterns as decimals
+  // Check for common date separators that might look like decimals
+  if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(str)) {
+    return false // This looks like a date (DD/MM/YYYY, MM/DD/YYYY, etc.)
+  }
+  
+  if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/.test(str)) {
+    return false // This looks like an ISO date (YYYY-MM-DD)
+  }
+
+  // Check for decimal pattern: digits with a single decimal separator
+  // Must have digits on both sides of the separator
+  return /^-?\d+[.,]\d+$/.test(str)
 }
 
 // Parse DMS (Degrees Minutes Seconds) format
@@ -400,6 +412,9 @@ function isLikelyGeocoordinate(value) {
 export function applyFormatting(data, config) {
   const { date, decimalFormat, geocoord } = config.formatting
 
+  // Get date columns as array (support both old single column and new multiple columns)
+  const dateColumns = date.columns || (date.column ? [date.column] : [])
+
   return data.map((row, rowIndex) => {
     const formattedRow = {}
     const metadata = row.__metadata || {}
@@ -417,14 +432,14 @@ export function applyFormatting(data, config) {
 
       const cellMeta = metadata[key] || null
 
-      // 🆕 Pass locale to formatDate (simplified - no customLocale)
-      if (date.mode === 'column' && key === date.column) {
+      // Apply date formatting to all selected date columns
+      if (date.mode === 'column' && dateColumns.includes(key)) {
         const formatted = formatDate(value, date.format, date.locale)
         value = formatted
       }
 
-      // Apply decimal formatting (but not to the date column)
-      if (!(date.mode === 'column' && key === date.column) && isLikelyDecimal(value)) {
+      // Apply decimal formatting (but not to date columns)
+      if (!(date.mode === 'column' && dateColumns.includes(key)) && isLikelyDecimal(value)) {
         value = formatDecimal(value, decimalFormat)
       }
 
@@ -475,8 +490,18 @@ export function applyFormatting(data, config) {
       value: metadata,
       enumerable: false,
       writable: false,
-      configurable: true // 🆕 Changed from false to true - fixes Vue proxy issue
+      configurable: true
     })
+    
+    // Preserve __spreadsheetRow if present
+    if (row.__spreadsheetRow !== undefined) {
+      Object.defineProperty(formattedRow, '__spreadsheetRow', {
+        value: row.__spreadsheetRow,
+        enumerable: false,
+        writable: false,
+        configurable: true
+      })
+    }
 
     return formattedRow
   })
