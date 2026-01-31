@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted, watch } from "vue";
+import { ref, computed, onMounted, watch, nextTick } from "vue";
 import packageJson from "../package.json";
 import FileDropZone from "./components/FileDropZone.vue";
 import ConfigurationPanels from "./components/ConfigurationPanels.vue";
@@ -687,6 +687,17 @@ onMounted(async () => {
     if (file) {
       handleExcelFile(file);
     }
+  }
+
+  // Show user guide if first visit (no config and not seen before)
+  const configKey = "specimensLabeler_configuration";
+  const seenGuideKey = "specimensLabeler_seenGuide";
+  const hasConfig = !!localStorage.getItem(configKey);
+  const hasSeenGuide = !!localStorage.getItem(seenGuideKey);
+
+  if (!hasSeenGuide) {
+    showHelpDrawer.value = true;
+    localStorage.setItem(seenGuideKey, "1");
   }
 });
 </script>
