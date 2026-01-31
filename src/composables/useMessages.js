@@ -17,6 +17,7 @@ export const MESSAGE_CATEGORIES = {
 }
 
 const messages = ref([])
+const isDrawerOpen = ref(false)
 let messageIdCounter = 0
 
 export function useMessages() {
@@ -35,7 +36,7 @@ export function useMessages() {
    */
   const addMessage = (options) => {
     const id = ++messageIdCounter
-    
+
     const newMessage = {
       id,
       type: options.type || MESSAGE_TYPES.INFO,
@@ -48,13 +49,17 @@ export function useMessages() {
       key: options.key || null,
       timestamp: Date.now()
     }
-    
+
     // If key is provided, remove existing message with same key
     if (options.key) {
       messages.value = messages.value.filter(m => m.key !== options.key)
     }
-    
+
     messages.value.push(newMessage)
+    isDrawerOpen.value = true
+
+    console.log("Message received:", newMessage)
+
     return id
   }
 
@@ -95,24 +100,24 @@ export function useMessages() {
 
   // Computed properties
   const hasMessages = computed(() => messages.value.length > 0)
-  
-  const hasErrors = computed(() => 
+
+  const hasErrors = computed(() =>
     messages.value.some(m => m.type === MESSAGE_TYPES.ERROR)
   )
-  
-  const hasWarnings = computed(() => 
+
+  const hasWarnings = computed(() =>
     messages.value.some(m => m.type === MESSAGE_TYPES.WARNING)
   )
 
-  const errorCount = computed(() => 
+  const errorCount = computed(() =>
     messages.value.filter(m => m.type === MESSAGE_TYPES.ERROR).length
   )
 
-  const warningCount = computed(() => 
+  const warningCount = computed(() =>
     messages.value.filter(m => m.type === MESSAGE_TYPES.WARNING).length
   )
 
-  const infoCount = computed(() => 
+  const infoCount = computed(() =>
     messages.value.filter(m => m.type === MESSAGE_TYPES.INFO).length
   )
 
@@ -136,6 +141,7 @@ export function useMessages() {
     errorCount,
     warningCount,
     infoCount,
+    isDrawerOpen,
     messagesByCategory,
     addMessage,
     removeMessage,

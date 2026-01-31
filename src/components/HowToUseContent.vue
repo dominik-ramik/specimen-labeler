@@ -329,11 +329,12 @@
             </p>
             <p class="section-text mt-2">
               For example, you might need:
+            </p>
               <ul class="ml-4 mt-1 mb-2">
                 <li><strong>Label A (Left):</strong> A tiny label to fit inside a vial.</li>
                 <li><strong>Label B (Right):</strong> A detailed label to stick on the outer surface of the vial.</li>
               </ul>
-            </p>
+
             <p class="section-text">
               <strong>How to do it:</strong> Place placeholders for the same record in both table cells. Only use the <code>{:next}</code> tag when you are ready to move to the <em>next</em> row in your spreadsheet.
             </p>

@@ -23,7 +23,7 @@ import {
   saveSheetName,
 } from "./utils/excelHandler";
 import { labelGenerator } from "./services/labelGenerator";
-import { deleteFileFromIndexedDB } from "./utils/indexedDBStorage";
+import { deleteFileFromIndexedDB, indexedDBDataToFile } from "./utils/indexedDBStorage";
 import { formatDataForPreview } from "./utils/previewFormatter";
 
 const {
@@ -59,6 +59,7 @@ const { validatePlaceholders, clearValidation } = usePlaceholderValidation();
 
 const {
   addMessage,
+  isDrawerOpen,
   clearCategory,
   clearTransient,
   removeMessageByKey,
@@ -76,7 +77,6 @@ const helpDrawerRef = ref(null);
 const showPreviewModal = ref(false);
 const previewData = ref([]);
 const templateColumns = ref([]);
-const showMessageDrawer = ref(false);
 
 // Sheet selection
 const availableSheets = ref([]);
@@ -125,6 +125,40 @@ const handleTemplateFile = async (file) => {
     });
   }
 };
+
+// Check if there are actual records to generate based on selection and duplicate settings
+const hasProcessableRecords = computed(() => {
+  if (!isReady.value || !cachedExcelData.value || cachedExcelData.value.length === 0) {
+    return false;
+  }
+
+  // 1. Check if rows exist within the selected range (Start/End/Specific)
+  const selectedData = labelGenerator.applyRecordSelection(
+    cachedExcelData.value,
+    configuration.value
+  );
+
+  if (selectedData.length === 0) return false;
+
+  // 2. If "Column" mode is active, ensure at least one row produces > 0 copies
+  if (configuration.value.duplicates.mode === 'column' && configuration.value.duplicates.column) {
+    const colName = configuration.value.duplicates.column;
+    const offset = configuration.value.duplicates.addSubtract || 0;
+
+    // Returns true if AT LEAST ONE row has a copy count > 0
+    return selectedData.some(row => {
+      const rawVal = row[colName];
+      // Treat empty/null as 0
+      const numVal = (rawVal === "" || rawVal === null || rawVal === undefined) 
+        ? 0 
+        : (parseInt(rawVal) || 0);
+      return Math.max(0, numVal + offset) > 0;
+    });
+  }
+
+  // If simple mode or no column selected yet, we have records
+  return true;
+});
 
 const totalDataRows = computed(() => {
   return cachedExcelData.value ? cachedExcelData.value.length : 0;
@@ -281,7 +315,6 @@ const generateLabels = async () => {
       message: error.message,
       key: "generation-error",
     });
-    showMessageDrawer.value = true; // Auto-open drawer on error
   } finally {
     isGenerating.value = false;
   }
@@ -558,6 +591,23 @@ watch(
 
     // Check for configuration issues
     if (isReady.value) {
+      const start = config.recordSelection.startRow;
+      const end = config.recordSelection.endRow;
+
+      // If invalid range -> show a keyed warning in message drawer
+      if (end < start) {
+        console.log("added message");
+        addMessage({
+          type: MESSAGE_TYPES.WARNING,
+          category: MESSAGE_CATEGORIES.CONFIGURATION,
+          title: "Invalid record range",
+          message: `End row (${end}) is less than start row (${start}).`,
+          suggestion:
+            "Ensure the end row is greater than or equal to the start row.",
+          key: "config-invalid-range",
+        });
+      } 
+
       if (config.duplicates.mode === "column" && !config.duplicates.column) {
         addMessage({
           type: MESSAGE_TYPES.WARNING,
@@ -619,38 +669,26 @@ onMounted(async () => {
   await initializeStorage();
   loadConfiguration();
 
+  // Load Template
   const storedTemplateData = await loadStoredTemplate();
   if (storedTemplateData) {
-    const file = useStoredTemplate();
+    // Convert raw DB data to File object
+    const file = indexedDBDataToFile(storedTemplateData);
     if (file) {
-      setTemplateFile(file);
-      templateFilename.value = file.name;
-      templateFilesize.value = formatFileSize(file.size);
-      isTemplateSaved.value = true;
+      handleTemplateFile(file);
     }
   }
 
+  // Load Excel
   const storedExcelData = await loadStoredExcel();
   if (storedExcelData) {
-    const file = useStoredExcel();
+    // Convert raw DB data to File object
+    const file = indexedDBDataToFile(storedExcelData);
     if (file) {
-      try {
-        await handleExcelFile(file);
-      } catch (error) {
-        console.error("Failed to restore Excel file:", error);
-      }
+      handleExcelFile(file);
     }
   }
 });
-
-// Watch for message changes to auto-show/hide drawer
-watch(
-  hasMessages,
-  (hasAnyMessages) => {
-    showMessageDrawer.value = hasAnyMessages;
-  },
-  { immediate: true },
-);
 </script>
 
 <template>
@@ -664,7 +702,7 @@ watch(
       <v-spacer></v-spacer>
 
       <!-- Message Indicator -->
-      <MessageIndicator @click="showMessageDrawer = true" class="mr-4" />
+      <MessageIndicator @click="isDrawerOpen = true" class="mr-4" />
 
       <v-btn
         variant="outlined"
@@ -681,7 +719,7 @@ watch(
     <HelpDrawer ref="helpDrawerRef" v-model="showHelpDrawer" />
 
     <!-- Message Drawer - now controlled by hasMessages -->
-    <MessageDrawer v-model="showMessageDrawer" />
+    <MessageDrawer v-model="isDrawerOpen" />
 
     <!-- Data Preview Modal -->
     <DataPreviewModal
@@ -782,7 +820,8 @@ watch(
                 <div class="text-h6 mt-4 text-grey">Upload Files to Begin</div>
                 <div class="text-body-2 text-grey mt-2">
                   Drop your Word template and Excel/CSV data file in the left
-                  panel (select the sheet to work on if you uploaded an Excel spreadsheet)
+                  panel (select the sheet to work on if you uploaded an Excel
+                  spreadsheet)
                 </div>
               </v-card>
             </template>
@@ -813,7 +852,7 @@ watch(
                   <v-btn
                     size="large"
                     class="main-gradient flex-grow-1"
-                    :disabled="!isReady || isGenerating"
+                    :disabled="!isReady || isGenerating|| !hasProcessableRecords"
                     @click="generateLabels"
                     :color="isReady ? 'white' : 'grey-lighten-3'"
                     :class="{ 'generate-btn-active': isReady }"

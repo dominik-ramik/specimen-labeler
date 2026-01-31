@@ -61,10 +61,17 @@
               <span class="panel-label">Label Copies</span>
             </v-expansion-panel-title>
             <v-expansion-panel-text>
-              <v-radio-group v-model="localConfig.duplicates.mode" @update:model-value="emitUpdate" hide-details>
+              <v-radio-group
+                v-model="localConfig.duplicates.mode"
+                @update:model-value="emitUpdate"
+                hide-details
+              >
                 <v-radio label="Get from Column" value="column"></v-radio>
-                
-                <div v-if="localConfig.duplicates.mode === 'column'" class="nested-controls ml-4 mt-2 mb-3">
+
+                <div
+                  v-if="localConfig.duplicates.mode === 'column'"
+                  class="nested-controls ml-4 mt-2 mb-3"
+                >
                   <div class="d-flex align-center ga-2 mb-2 flex-wrap">
                     <v-label style="min-width: 60px">Column:</v-label>
                     <v-select
@@ -87,11 +94,15 @@
                       style="width: 70px"
                     ></v-text-field>
                   </div>
-                  <div class="text-caption text-grey" style="font-size: 11px; line-height: 1.3;">
-                    Adjust the column value. Example: if column = 3 and offset by = -1, you get 2 copies
+                  <div
+                    class="text-caption text-grey"
+                    style="font-size: 11px; line-height: 1.3"
+                  >
+                    Adjust the column value. Example: if column = 3 and offset
+                    by = -1, you get 2 copies
                   </div>
                 </div>
-                
+
                 <v-radio value="fixed">
                   <template v-slot:label>
                     <div class="d-flex align-center ga-2">
@@ -111,13 +122,28 @@
                   </template>
                 </v-radio>
               </v-radio-group>
-              
+
               <!-- Collation Order -->
               <div v-if="shouldShowCollateOption" class="mt-3 pa-3">
-                <v-label class="font-weight-medium mb-2">Collation Order:</v-label>
-                <v-radio-group v-model="localConfig.duplicates.collate" @update:model-value="emitUpdate" hide-details density="compact" inline>
-                  <v-radio label="Sets Together (A,B,C,A,B,C)" value="collated"></v-radio>
-                  <v-radio label="Duplicates Together (A,A,B,B)" value="uncollated" class="ml-4"></v-radio>
+                <v-label class="font-weight-medium mb-2"
+                  >Collation Order:</v-label
+                >
+                <v-radio-group
+                  v-model="localConfig.duplicates.collate"
+                  @update:model-value="emitUpdate"
+                  hide-details
+                  density="compact"
+                  inline
+                >
+                  <v-radio
+                    label="Sets Together (A,B,C,A,B,C)"
+                    value="collated"
+                    class="mr-4"
+                  ></v-radio>
+                  <v-radio
+                    label="Duplicates Together (A,A,B,B)"
+                    value="uncollated"
+                  ></v-radio>
                 </v-radio-group>
               </div>
             </v-expansion-panel-text>
@@ -136,14 +162,27 @@
             </v-expansion-panel-title>
             <v-expansion-panel-text>
               <!-- Date Format -->
-<div class="option-group">
+              <div class="option-group">
                 <v-label class="option-label mb-2">Date Format</v-label>
-                <v-radio-group v-model="localConfig.formatting.date.mode" @update:model-value="emitUpdate" hide-details density="compact" inline>
-                  <v-radio label="No formatting" value="none"></v-radio>
-                  <v-radio label="Format columns" value="column" class="ml-4"></v-radio>
+                <v-radio-group
+                  v-model="localConfig.formatting.date.mode"
+                  @update:model-value="emitUpdate"
+                  hide-details
+                  density="compact"
+                  inline
+                >
+                  <v-radio
+                    label="No formatting"
+                    value="none"
+                    class="mr-4"
+                  ></v-radio>
+                  <v-radio label="Format columns" value="column"></v-radio>
                 </v-radio-group>
-                
-                <div v-if="localConfig.formatting.date.mode === 'column'" class="nested-controls mt-2">
+
+                <div
+                  v-if="localConfig.formatting.date.mode === 'column'"
+                  class="nested-controls mt-2"
+                >
                   <v-select
                     v-model="localConfig.formatting.date.columns"
                     :items="dateColumnOptions"
@@ -154,9 +193,9 @@
                     hide-details
                     class="mb-2"
                   ></v-select>
-                  
+
                   <v-divider class="my-2"></v-divider>
-                  
+
                   <div class="d-flex align-center ga-2 mb-2">
                     <v-select
                       v-model="localConfig.formatting.date.locale"
@@ -165,7 +204,7 @@
                       label="Locale"
                       hide-details
                       class="flex-grow-1"
-                      style="flex-basis: 0; min-width: 120px;"
+                      style="flex-basis: 0; min-width: 120px"
                     ></v-select>
                     <v-select
                       v-model="localConfig.formatting.date.format"
@@ -174,11 +213,16 @@
                       label="Format"
                       hide-details
                       class="flex-grow-1"
-                      style="flex-basis: 0; min-width: 120px;"
+                      style="flex-basis: 0; min-width: 120px"
                     ></v-select>
                   </div>
-                  
-                  <v-alert type="info" density="compact" variant="tonal" class="mt-2">
+
+                  <v-alert
+                    type="info"
+                    density="compact"
+                    variant="tonal"
+                    class="mt-2"
+                  >
                     Example: {{ formatExample }}
                   </v-alert>
                 </div>
@@ -189,9 +233,14 @@
               <!-- Decimal Format -->
               <div class="option-group">
                 <v-label class="option-label mb-2">Decimal Format</v-label>
-                <v-radio-group v-model="localConfig.formatting.decimalFormat" @update:model-value="emitUpdate" hide-details inline>
-                  <v-radio label="Dot (1.5)" value="dot"></v-radio>
-                  <v-radio label="Comma (1,5)" value="comma" class="ml-4"></v-radio>
+                <v-radio-group
+                  v-model="localConfig.formatting.decimalFormat"
+                  @update:model-value="emitUpdate"
+                  hide-details
+                  inline
+                >
+                  <v-radio label="Dot (1.5)" value="dot" class="mr-4"></v-radio>
+                  <v-radio label="Comma (1,5)" value="comma"></v-radio>
                 </v-radio-group>
               </div>
 
@@ -200,13 +249,30 @@
               <!-- Geocoordinates -->
               <div class="option-group">
                 <v-label class="option-label mb-2">Geocoordinates</v-label>
-                <v-radio-group v-model="localConfig.formatting.geocoord.mode" @update:model-value="emitUpdate" hide-details density="compact" inline>
-                  <v-radio label="No transformation" value="none"></v-radio>
-                  <v-radio label="Single column" value="single" class="ml-4"></v-radio>
-                  <v-radio label="Separate columns" value="separate" class="ml-4"></v-radio>
+                <v-radio-group
+                  v-model="localConfig.formatting.geocoord.mode"
+                  @update:model-value="emitUpdate"
+                  hide-details
+                  density="compact"
+                  inline
+                >
+                  <v-radio
+                    label="No transformation"
+                    value="none"
+                    class="mr-4"
+                  ></v-radio>
+                  <v-radio
+                    label="Single column"
+                    value="single"
+                    class="mr-4"
+                  ></v-radio>
+                  <v-radio label="Separate columns" value="separate"></v-radio>
                 </v-radio-group>
-                
-                <div v-if="localConfig.formatting.geocoord.mode === 'single'" class="nested-controls mt-2">
+
+                <div
+                  v-if="localConfig.formatting.geocoord.mode === 'single'"
+                  class="nested-controls mt-2"
+                >
                   <v-select
                     v-model="localConfig.formatting.geocoord.singleColumn"
                     :items="dateColumnOptions"
@@ -215,8 +281,11 @@
                     hide-details
                   ></v-select>
                 </div>
-                
-                <div v-if="localConfig.formatting.geocoord.mode === 'separate'" class="nested-controls mt-2">
+
+                <div
+                  v-if="localConfig.formatting.geocoord.mode === 'separate'"
+                  class="nested-controls mt-2"
+                >
                   <div class="d-flex align-center ga-2">
                     <v-select
                       v-model="localConfig.formatting.geocoord.latColumn"
@@ -225,7 +294,7 @@
                       label="Latitude column"
                       hide-details
                       class="flex-grow-1"
-                      style="flex-basis: 0; min-width: 120px;"
+                      style="flex-basis: 0; min-width: 120px"
                     ></v-select>
                     <v-select
                       v-model="localConfig.formatting.geocoord.lonColumn"
@@ -234,12 +303,15 @@
                       label="Longitude column"
                       hide-details
                       class="flex-grow-1"
-                      style="flex-basis: 0; min-width: 120px;"
+                      style="flex-basis: 0; min-width: 120px"
                     ></v-select>
                   </div>
                 </div>
-                
-                <div v-if="localConfig.formatting.geocoord.mode !== 'none'" class="mt-2">
+
+                <div
+                  v-if="localConfig.formatting.geocoord.mode !== 'none'"
+                  class="mt-2"
+                >
                   <v-select
                     v-model="localConfig.formatting.geocoord.outputFormat"
                     :items="coordFormatOptions"
@@ -258,160 +330,180 @@
 </template>
 
 <script setup>
-import { ref, watch, computed } from 'vue'
+import { ref, watch, computed } from "vue";
+import {
+  useMessages,
+  MESSAGE_TYPES,
+  MESSAGE_CATEGORIES,
+} from "@/composables/useMessages";
+
+const {
+  addMessage,
+  clearCategory,
+  clearTransient,
+  removeMessageByKey,
+  hasMessages,
+  hasErrors,
+} = useMessages();
 
 const props = defineProps({
   config: {
     type: Object,
-    required: true
+    required: true,
   },
   headers: {
     type: Array,
-    default: () => []
+    default: () => [],
   },
   totalRows: {
     type: Number,
-    default: 1
+    default: 1,
   },
   templateColumns: {
     type: Array,
-    default: () => []
-  }
-})
+    default: () => [],
+  },
+});
 
-const emit = defineEmits(['update:config'])
+const emit = defineEmits(["update:config"]);
 
-const localConfig = ref(JSON.parse(JSON.stringify(props.config)))
+const localConfig = ref(JSON.parse(JSON.stringify(props.config)));
 
 // Separate panels for left and right columns
-const leftPanels = ref(['records', 'copies'])
-const rightPanels = ref(['formatting'])
+const leftPanels = ref(["records", "copies"]);
+const rightPanels = ref(["formatting"]);
 
 // Options for selects
 const localeOptions = [
-  { title: 'English', value: 'en-US' },
-  { title: 'Czech (Čeština)', value: 'cs-CZ' },
-  { title: 'German (Deutsch)', value: 'de-DE' },
-  { title: 'Spanish (Español)', value: 'es-ES' },
-  { title: 'French (Français)', value: 'fr-FR' },
-  { title: 'Italian (Italiano)', value: 'it-IT' },
-  { title: 'Polish (Polski)', value: 'pl-PL' },
-  { title: 'Portuguese (Português)', value: 'pt-BR' },
-  { title: 'Russian (Русский)', value: 'ru-RU' },
-  { title: 'Chinese (中文)', value: 'zh-CN' },
-  { title: 'Japanese (日本語)', value: 'ja-JP' },
-  { title: 'Korean (한국어)', value: 'ko-KR' },
-  { title: 'Arabic (العربية)', value: 'ar-SA' },
-  { title: 'Hindi (हिन्दी)', value: 'hi-IN' }
-]
+  { title: "English", value: "en-US" },
+  { title: "Czech (Čeština)", value: "cs-CZ" },
+  { title: "German (Deutsch)", value: "de-DE" },
+  { title: "Spanish (Español)", value: "es-ES" },
+  { title: "French (Français)", value: "fr-FR" },
+  { title: "Italian (Italiano)", value: "it-IT" },
+  { title: "Polish (Polski)", value: "pl-PL" },
+  { title: "Portuguese (Português)", value: "pt-BR" },
+  { title: "Russian (Русский)", value: "ru-RU" },
+  { title: "Chinese (中文)", value: "zh-CN" },
+  { title: "Japanese (日本語)", value: "ja-JP" },
+  { title: "Korean (한국어)", value: "ko-KR" },
+  { title: "Arabic (العربية)", value: "ar-SA" },
+  { title: "Hindi (हिन्दी)", value: "hi-IN" },
+];
 
 const dateFormatOptions = [
-  { title: 'Month name Day, Year', value: 'english' },
-  { title: 'Three-letter month', value: 'short' },
-  { title: 'Roman numeral month', value: 'roman' },
-  { title: 'ISO (YYYY-MM-DD)', value: 'iso' },
-  { title: 'Uppercase short', value: 'threeletter' }
-]
+  { title: "Month name Day, Year", value: "english" },
+  { title: "Three-letter month", value: "short" },
+  { title: "Roman numeral month", value: "roman" },
+  { title: "ISO (YYYY-MM-DD)", value: "iso" },
+  { title: "Uppercase short", value: "threeletter" },
+];
 
 const coordFormatOptions = [
-  { title: 'DMS (12°34\'56.7"N)', value: 'dms' },
-  { title: 'Decimal with direction (12.58N)', value: 'decimal-direction' },
-  { title: 'Signed decimal (-12.58)', value: 'decimal-signed' }
-]
+  { title: "DMS (12°34'56.7\"N)", value: "dms" },
+  { title: "Decimal with direction (12.58N)", value: "decimal-direction" },
+  { title: "Signed decimal (-12.58)", value: "decimal-signed" },
+];
 
 const shouldShowCollateOption = computed(() => {
-  const mode = localConfig.value.duplicates.mode
-  const fixed = localConfig.value.duplicates.fixed
-  const column = localConfig.value.duplicates.column
-  return (mode === 'fixed' && fixed > 1) || (mode === 'column' && column !== '')
-})
+  const mode = localConfig.value.duplicates.mode;
+  const fixed = localConfig.value.duplicates.fixed;
+  const column = localConfig.value.duplicates.column;
+  return (
+    (mode === "fixed" && fixed > 1) || (mode === "column" && column !== "")
+  );
+});
 
 // Format example for date
 const formatExample = computed(() => {
-  const format = localConfig.value.formatting.date.format
-  const locale = localConfig.value.formatting.date.locale || 'en-US'
-  
+  const format = localConfig.value.formatting.date.format;
+  const locale = localConfig.value.formatting.date.locale || "en-US";
+
   const getMonthName = (style) => {
     try {
-      const date = new Date(2025, 0, 26)
-      return new Intl.DateTimeFormat(locale, { month: style }).format(date)
+      const date = new Date(2025, 0, 26);
+      return new Intl.DateTimeFormat(locale, { month: style }).format(date);
     } catch {
-      return style === 'long' ? 'January' : 'Jan'
+      return style === "long" ? "January" : "Jan";
     }
-  }
-  
+  };
+
   switch (format) {
-    case 'english': return `${getMonthName('long')} 26, 2025`
-    case 'short': return `${getMonthName('short')} 26, 2025`
-    case 'roman': return '26-I-2025'
-    case 'iso': return '2025-01-26'
-    case 'threeletter': return `26 ${getMonthName('short').toUpperCase()} 2025`
-    default: return ''
+    case "english":
+      return `${getMonthName("long")} 26, 2025`;
+    case "short":
+      return `${getMonthName("short")} 26, 2025`;
+    case "roman":
+      return "26-I-2025";
+    case "iso":
+      return "2025-01-26";
+    case "threeletter":
+      return `26 ${getMonthName("short").toUpperCase()} 2025`;
+    default:
+      return "";
   }
-})
+});
 
 // Columns available for date formatting (only those in template, or all if no template)
 const dateColumnOptions = computed(() => {
   if (props.templateColumns && props.templateColumns.length > 0) {
     // Filter to only columns that exist in both template and data
-    return props.templateColumns.filter(col => props.headers.includes(col))
+    return props.templateColumns.filter((col) => props.headers.includes(col));
   }
   // Fallback: show all headers if no template columns detected
-  return props.headers
-})
+  return props.headers;
+});
 
 // Watch for prop changes
 watch(
   () => props.config,
   (newConfig) => {
-    localConfig.value = JSON.parse(JSON.stringify(newConfig))
+    localConfig.value = JSON.parse(JSON.stringify(newConfig));
   },
-  { deep: true }
-)
+  { deep: true },
+);
 
 // Watch for totalRows changes
 watch(
   () => props.totalRows,
   (newTotal) => {
     if (newTotal > 0 && localConfig.value.recordSelection.endRow < newTotal) {
-      localConfig.value.recordSelection.endRow = newTotal
+      localConfig.value.recordSelection.endRow = newTotal;
     }
   },
-  { immediate: true }
-)
+  { immediate: true },
+);
 
 const emitUpdate = () => {
-  emit('update:config', JSON.parse(JSON.stringify(localConfig.value)))
-}
+  emit("update:config", JSON.parse(JSON.stringify(localConfig.value)));
+};
 
 // Handle record range change
 const handleRecordRangeChange = () => {
-  // Ensure endRow is always >= startRow
-  if (localConfig.value.recordSelection.endRow < localConfig.value.recordSelection.startRow) {
-    localConfig.value.recordSelection.endRow = localConfig.value.recordSelection.startRow
-  }
-  
-  emitUpdate()
-}
+  emitUpdate();
+};
 
 // Reset to full range
 const resetToFullRange = () => {
-  localConfig.value.recordSelection.startRow = 1
-  localConfig.value.recordSelection.endRow = props.totalRows
-  emitUpdate()
-}
+  localConfig.value.recordSelection.startRow = 1;
+  localConfig.value.recordSelection.endRow = props.totalRows;
+  emitUpdate();
+};
 
 // Computed: is the current range full (1 to totalRows)?
 const isFullRange = computed(() => {
-  return localConfig.value.recordSelection.startRow === 1 && localConfig.value.recordSelection.endRow === props.totalRows
-})
+  return (
+    localConfig.value.recordSelection.startRow === 1 &&
+    localConfig.value.recordSelection.endRow === props.totalRows
+  );
+});
 
 // Computed: number of records in the selected range
 const selectedRecordCount = computed(() => {
-  const { startRow, endRow } = localConfig.value.recordSelection
-  if (startRow == null || endRow == null || startRow > endRow) return 0
-  return endRow - startRow + 1
-})
+  const { startRow, endRow } = localConfig.value.recordSelection;
+  if (startRow == null || endRow == null || startRow > endRow) return 0;
+  return endRow - startRow + 1;
+});
 </script>
 
 <style scoped>
