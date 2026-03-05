@@ -33,7 +33,7 @@ function resolveLocale(localeConfig) {
   return localeConfig || 'en-US'
 }
 
-function formatDate(dateString, format, locale = 'en-US') {
+function formatDate(dateString, format, locale = 'en-US', cellMetadata = null) {
   if (!dateString || dateString.toString().trim() === '') return dateString
 
   try {
@@ -42,6 +42,21 @@ function formatDate(dateString, format, locale = 'en-US') {
     // Handle Excel serial numbers (dates stored as numbers)
     if (!isNaN(dateString) && dateString > 0) {
       const serialNumber = parseFloat(dateString)
+
+      // When cell metadata is available from an Excel file (format !== null)
+      // and explicitly says this is NOT a date cell, don't convert as serial.
+      // This prevents plain numbers (e.g. specimen counts) in a mostly-date
+      // column from being silently turned into bogus dates.
+      const metaSaysNotDate = cellMetadata
+        && cellMetadata.isDate === false
+        && cellMetadata.format != null
+
+      if (metaSaysNotDate) {
+        // Excel tells us this cell is not formatted as a date — return as-is
+        return dateString
+      }
+
+      // Either metadata confirms date, or no metadata (CSV) — use heuristic
       // Excel date serial number starts from 1900-01-01
       if (serialNumber > 1 && serialNumber < 100000) {
         date = new Date((serialNumber - 25569) * 86400 * 1000)
@@ -153,18 +168,25 @@ function isLikelyDate(value, metadata = null) {
 
   // If we have Excel metadata, use it first (most reliable)
   if (metadata && metadata.isDate) {
-    console.log(`[DEBUG] Cell marked as date by Excel format:`, value)
     return true
   }
+
+  // If Excel metadata explicitly says NOT a date (has format info but not
+  // date format), don't treat plain numbers as date serials.
+  const metaSaysNotDate = metadata
+    && !metadata.isDate
+    && metadata.format != null
 
   const str = value.toString().trim()
 
   // Skip if it's just a small number (likely not a date)
   if (/^\d+$/.test(str)) {
     const num = parseInt(str)
-    // Excel serial dates are typically > 25000 (year 1968+)
-    // But also check for dates > 40000 (year 2009+) which are more common
     if (num < 1000) {
+      return false
+    }
+    // When metadata explicitly says this is NOT a date, respect it
+    if (metaSaysNotDate) {
       return false
     }
     // If it's a reasonable Excel serial number, treat as date
@@ -259,8 +281,13 @@ function parseDecimal(value) {
   const match = normalizedStr.match(decimalPattern)
   
   if (!match) {
-    const num = parseFloat(normalizedStr)
-    return isNaN(num) ? null : num
+    // Only accept if the entire remaining string is a plain number.
+    // parseFloat silently truncates at the first non-numeric character
+    // (e.g. "1/15/2024" → 1), which would produce wrong coordinates.
+    if (/^-?\d+(\.\d+)?$/.test(normalizedStr.trim())) {
+      return parseFloat(normalizedStr)
+    }
+    return null
   }
   
   let decimal = parseFloat(match[1])
@@ -434,17 +461,22 @@ export function applyFormatting(data, config) {
 
       // Apply date formatting to all selected date columns
       if (date.mode === 'column' && dateColumns.includes(key)) {
-        const formatted = formatDate(value, date.format, date.locale)
+        const formatted = formatDate(value, date.format, date.locale, cellMeta)
         value = formatted
       }
 
-      // Apply decimal formatting (but not to date columns)
-      if (!(date.mode === 'column' && dateColumns.includes(key)) && isLikelyDecimal(value)) {
+      // Apply decimal formatting (but not to date columns, and not to cells
+      // that Excel identifies as dates — those could be serial numbers)
+      if (!(date.mode === 'column' && dateColumns.includes(key))
+        && !cellMeta?.isDate
+        && isLikelyDecimal(value)) {
         value = formatDecimal(value, decimalFormat)
       }
 
       // Apply geocoordinate transformation
-      if (geocoord.mode !== 'none') {
+      // Skip cells that Excel identifies as dates — they would be silently
+      // truncated by parseFloat (e.g. "1/15/2024" → coordinate 1).
+      if (geocoord.mode !== 'none' && !cellMeta?.isDate) {
         if (geocoord.mode === 'single') {
           // Single column with both lat and lon
           if (key === geocoord.singleColumn && isLikelyGeocoordinate(value)) {

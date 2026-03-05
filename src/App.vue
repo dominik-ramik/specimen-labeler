@@ -24,7 +24,10 @@ import {
   validateCopiesColumn,
 } from "./utils/excelHandler";
 import { labelGenerator } from "./services/labelGenerator";
-import { deleteFileFromIndexedDB, indexedDBDataToFile } from "./utils/indexedDBStorage";
+import {
+  deleteFileFromIndexedDB,
+  indexedDBDataToFile,
+} from "./utils/indexedDBStorage";
 import { formatDataForPreview } from "./utils/previewFormatter";
 
 const {
@@ -73,7 +76,7 @@ const showCopiesColumnDialog = ref(false);
 const copiesColumnProblems = ref([]);
 const MAX_DISPLAYED_PROBLEMS = 50;
 const copiesColumnProblemsDisplay = computed(() =>
-  copiesColumnProblems.value.slice(0, MAX_DISPLAYED_PROBLEMS)
+  copiesColumnProblems.value.slice(0, MAX_DISPLAYED_PROBLEMS),
 );
 const copiesColumnProblemLabel = (reason) => {
   switch (reason) {
@@ -99,21 +102,23 @@ const excessiveCopiesEntries = ref([]);
 const excessiveCopiesIsFixed = ref(false);
 const MAX_DISPLAYED_EXCESSIVE = 50;
 const excessiveCopiesEntriesDisplay = computed(() =>
-  excessiveCopiesEntries.value.slice(0, MAX_DISPLAYED_EXCESSIVE)
+  excessiveCopiesEntries.value.slice(0, MAX_DISPLAYED_EXCESSIVE),
 );
 let resolveExcessiveCopiesPrompt = null;
 
 // Mirrors resolveCopiesValue from labelGenerator.js to resolve copy count for a single row
 const resolveRowCopies = (row, config) => {
-  const { mode, column, addSubtract, fixed, invalidValueHandling } = config.duplicates;
-  const handling = invalidValueHandling || 'skip';
+  const { mode, column, addSubtract, fixed, invalidValueHandling } =
+    config.duplicates;
+  const handling = invalidValueHandling || "skip";
   const offset = addSubtract || 0;
-  if (mode === 'fixed') return Math.max(0, fixed || 1);
-  if (mode === 'column' && column) {
+  if (mode === "fixed") return Math.max(0, fixed || 1);
+  if (mode === "column" && column) {
     const rawValue = row[column];
     const meta = row.__metadata?.[column] ?? null;
-    const fallback = handling === 'assume1' ? 1 : 0;
-    if (rawValue === '' || rawValue === null || rawValue === undefined) return 0;
+    const fallback = handling === "assume1" ? 1 : 0;
+    if (rawValue === "" || rawValue === null || rawValue === undefined)
+      return 0;
     if (meta?.isDate) return fallback;
     const str = rawValue.toString().trim();
     const num = Number(str);
@@ -222,39 +227,50 @@ const handleTemplateFile = async (file) => {
 
 // Check if there are actual records to generate based on selection and duplicate settings
 const hasProcessableRecords = computed(() => {
-  if (!isReady.value || !cachedExcelData.value || cachedExcelData.value.length === 0) {
+  if (
+    !isReady.value ||
+    !cachedExcelData.value ||
+    cachedExcelData.value.length === 0
+  ) {
     return false;
   }
 
   // 1. Check if rows exist within the selected range (Start/End/Specific)
   const selectedData = labelGenerator.applyRecordSelection(
     cachedExcelData.value,
-    configuration.value
+    configuration.value,
   );
 
   if (selectedData.length === 0) return false;
 
   // 2. If "Column" mode is active, ensure at least one row produces > 0 copies
-  if (configuration.value.duplicates.mode === 'column' && configuration.value.duplicates.column) {
+  if (
+    configuration.value.duplicates.mode === "column" &&
+    configuration.value.duplicates.column
+  ) {
     const colName = configuration.value.duplicates.column;
     const offset = configuration.value.duplicates.addSubtract || 0;
-    const handling = configuration.value.duplicates.invalidValueHandling || 'skip';
+    const handling =
+      configuration.value.duplicates.invalidValueHandling || "skip";
 
     // Returns true if AT LEAST ONE row has a copy count > 0
-    return selectedData.some(row => {
+    return selectedData.some((row) => {
       const rawVal = row[colName];
       const meta = row.__metadata?.[colName] ?? null;
       // Reuse the same resolution logic as labelGenerator
       let numVal = 0;
-      if (rawVal === '' || rawVal === null || rawVal === undefined) {
+      if (rawVal === "" || rawVal === null || rawVal === undefined) {
         numVal = 0;
       } else if (meta?.isDate) {
-        numVal = handling === 'assume1' ? 1 : 0;
+        numVal = handling === "assume1" ? 1 : 0;
       } else {
         const n = Number(rawVal.toString().trim());
-        numVal = (!isFinite(n) || isNaN(n) || !Number.isInteger(n))
-          ? (handling === 'assume1' ? 1 : 0)
-          : n;
+        numVal =
+          !isFinite(n) || isNaN(n) || !Number.isInteger(n)
+            ? handling === "assume1"
+              ? 1
+              : 0
+            : n;
       }
       return Math.max(0, numVal + offset) > 0;
     });
@@ -409,21 +425,27 @@ const generateLabels = async () => {
 
     // Check for suspiciously high copy counts before proceeding
     {
-      const selectedData = labelGenerator.applyRecordSelection(data, configuration.value);
+      const selectedData = labelGenerator.applyRecordSelection(
+        data,
+        configuration.value,
+      );
       const mode = configuration.value.duplicates.mode;
-      const isFixed = mode === 'fixed';
+      const isFixed = mode === "fixed";
       const excessiveEntries = [];
 
       if (isFixed) {
         const fixedCount = configuration.value.duplicates.fixed || 1;
         if (fixedCount > EXCESSIVE_COPIES_THRESHOLD) {
-          excessiveEntries.push({ copies: fixedCount, rowCount: selectedData.length });
+          excessiveEntries.push({
+            copies: fixedCount,
+            rowCount: selectedData.length,
+          });
         }
       } else {
         for (let i = 0; i < selectedData.length; i++) {
           const copies = resolveRowCopies(selectedData[i], configuration.value);
           if (copies > EXCESSIVE_COPIES_THRESHOLD) {
-            const rowNum = selectedData[i].__spreadsheetRow ?? (i + 2);
+            const rowNum = selectedData[i].__spreadsheetRow ?? i + 2;
             excessiveEntries.push({ rowNum, copies });
           }
         }
@@ -431,7 +453,10 @@ const generateLabels = async () => {
 
       if (excessiveEntries.length > 0) {
         hideLoading();
-        const confirmed = await promptExcessiveCopies(excessiveEntries, isFixed);
+        const confirmed = await promptExcessiveCopies(
+          excessiveEntries,
+          isFixed,
+        );
         if (!confirmed) {
           isGenerating.value = false;
           return;
@@ -582,7 +607,8 @@ watch(
 
     const column = configuration.value.duplicates.column;
     const addSubtract = configuration.value.duplicates.addSubtract || 0;
-    const handling = configuration.value.duplicates.invalidValueHandling || 'skip';
+    const handling =
+      configuration.value.duplicates.invalidValueHandling || "skip";
 
     const skippedRows = [];
     const selectedData = labelGenerator.applyRecordSelection(
@@ -594,15 +620,18 @@ watch(
       const rawValue = row[column];
       const meta = row.__metadata?.[column] ?? null;
       let columnValue = 0;
-      if (rawValue === '' || rawValue === null || rawValue === undefined) {
+      if (rawValue === "" || rawValue === null || rawValue === undefined) {
         columnValue = 0;
       } else if (meta?.isDate) {
-        columnValue = handling === 'assume1' ? 1 : 0;
+        columnValue = handling === "assume1" ? 1 : 0;
       } else {
         const n = Number(rawValue.toString().trim());
-        columnValue = (!isFinite(n) || isNaN(n) || !Number.isInteger(n))
-          ? (handling === 'assume1' ? 1 : 0)
-          : n;
+        columnValue =
+          !isFinite(n) || isNaN(n) || !Number.isInteger(n)
+            ? handling === "assume1"
+              ? 1
+              : 0
+            : n;
       }
       const copies = Math.max(0, columnValue + addSubtract);
 
@@ -769,7 +798,7 @@ watch(
             "Ensure the end row is greater than or equal to the start row.",
           key: "config-invalid-range",
         });
-      } 
+      }
 
       if (config.duplicates.mode === "column" && !config.duplicates.column) {
         addMessage({
@@ -832,7 +861,10 @@ watch(
 // data is already loaded. The reload / initial-load case is handled directly
 // in handleSheetSelection once data is available.
 watch(
-  () => [configuration.value.duplicates.mode, configuration.value.duplicates.column],
+  () => [
+    configuration.value.duplicates.mode,
+    configuration.value.duplicates.column,
+  ],
   ([mode, column]) => {
     if (mode !== "column" || !column) {
       lastValidatedCopiesColumn = null;
@@ -846,7 +878,7 @@ watch(
     if (!data || data.length === 0) return;
 
     checkAndShowCopiesColumnDialog(column, data);
-  }
+  },
 );
 
 // Initialize on mount
@@ -1048,7 +1080,9 @@ onMounted(async () => {
                   <v-btn
                     size="large"
                     class="main-gradient flex-grow-1"
-                    :disabled="!isReady || isGenerating|| !hasProcessableRecords"
+                    :disabled="
+                      !isReady || isGenerating || !hasProcessableRecords
+                    "
                     @click="generateLabels"
                     :color="isReady ? 'white' : 'grey-lighten-3'"
                     :class="{ 'generate-btn-active': isReady }"
@@ -1076,13 +1110,19 @@ onMounted(async () => {
       <!-- Footer -->
       <div class="app-footer">
         © 2025
-        <a
-          href="https://dominicweb.eu"
-          target="_blank"
-          rel="noopener noreferrer"
-          >Dominik M. Ramík</a
+        <a href="https://dominicweb.eu" target="_blank">Dominik M. Ramík</a>
+        <span class="version">v{{ packageJson.version }}</span> | Originally created for
+        the
+        <a href="https://pvnh.net/plants-and-people-of-vanuatu/" target="_blank"
+          >Plants and People of Vanuatu</a
         >
-        <span class="version">v{{ packageJson.version }}</span>
+        research project |
+        <a
+          href="https://github.com/dominik-ramik/specimen-labeler"
+          ,
+          target="_blank"
+          >Specimen Labeller on GitHub</a
+        >
       </div>
     </v-main>
 
@@ -1103,9 +1143,16 @@ onMounted(async () => {
         <v-card-text>
           <p class="mb-3">
             The following
-            <span v-if="excessiveCopiesIsFixed">fixed copies setting exceeds</span>
-            <span v-else>{{ excessiveCopiesEntries.length === 1 ? 'entry has a copy count that exceeds' : 'entries have copy counts that exceed' }}</span>
-            the warning threshold of <strong>{{ EXCESSIVE_COPIES_THRESHOLD }}</strong> copies:
+            <span v-if="excessiveCopiesIsFixed"
+              >fixed copies setting exceeds</span
+            >
+            <span v-else>{{
+              excessiveCopiesEntries.length === 1
+                ? "entry has a copy count that exceeds"
+                : "entries have copy counts that exceed"
+            }}</span>
+            the warning threshold of
+            <strong>{{ EXCESSIVE_COPIES_THRESHOLD }}</strong> copies:
           </p>
 
           <!-- Fixed mode: single summary row -->
@@ -1117,11 +1164,20 @@ onMounted(async () => {
             icon="mdi-numeric-positive-1"
             class="mb-4"
           >
-            Fixed copies: <strong>{{ excessiveCopiesEntries[0]?.copies }}</strong>
+            Fixed copies:
+            <strong>{{ excessiveCopiesEntries[0]?.copies }}</strong>
             &nbsp;&mdash;&nbsp;
-            {{ excessiveCopiesEntries[0]?.rowCount }} record{{ excessiveCopiesEntries[0]?.rowCount === 1 ? '' : 's' }}
-            will each get <strong>{{ excessiveCopiesEntries[0]?.copies }}</strong> copies
-            (total: <strong>{{ (excessiveCopiesEntries[0]?.copies ?? 0) * (excessiveCopiesEntries[0]?.rowCount ?? 0) }}</strong> labels)
+            {{ excessiveCopiesEntries[0]?.rowCount }} record{{
+              excessiveCopiesEntries[0]?.rowCount === 1 ? "" : "s"
+            }}
+            will each get
+            <strong>{{ excessiveCopiesEntries[0]?.copies }}</strong> copies
+            (total:
+            <strong>{{
+              (excessiveCopiesEntries[0]?.copies ?? 0) *
+              (excessiveCopiesEntries[0]?.rowCount ?? 0)
+            }}</strong>
+            labels)
           </v-alert>
 
           <!-- Column mode: list of individual rows -->
@@ -1129,21 +1185,30 @@ onMounted(async () => {
             v-else
             lines="two"
             class="mb-4 rounded"
-            style="max-height: 220px; overflow-y: auto; border: 1px solid #e0e0e0"
+            style="
+              max-height: 220px;
+              overflow-y: auto;
+              border: 1px solid #e0e0e0;
+            "
           >
             <v-list-item
               v-for="(entry, i) in excessiveCopiesEntriesDisplay"
               :key="i"
               prepend-icon="mdi-content-copy"
             >
-              <v-list-item-title>Row {{ entry.rowNum }}: {{ entry.copies }} copies</v-list-item-title>
+              <v-list-item-title
+                >Row {{ entry.rowNum }}:
+                {{ entry.copies }} copies</v-list-item-title
+              >
             </v-list-item>
             <v-list-item
               v-if="excessiveCopiesEntries.length > MAX_DISPLAYED_EXCESSIVE"
               prepend-icon="mdi-dots-horizontal"
             >
               <v-list-item-title class="text-medium-emphasis">
-                &hellip; and {{ excessiveCopiesEntries.length - MAX_DISPLAYED_EXCESSIVE }} more
+                &hellip; and
+                {{ excessiveCopiesEntries.length - MAX_DISPLAYED_EXCESSIVE }}
+                more
               </v-list-item-title>
             </v-list-item>
           </v-list>
@@ -1154,8 +1219,9 @@ onMounted(async () => {
             density="compact"
             icon="mdi-alert"
           >
-            Generating a large number of copies may produce a very large document and take significant time.
-            Please confirm this is intentional before proceeding.
+            Generating a large number of copies may produce a very large
+            document and take significant time. Please confirm this is
+            intentional before proceeding.
           </v-alert>
         </v-card-text>
         <v-card-actions class="d-flex ga-2 pa-4 pt-0">
@@ -1199,7 +1265,11 @@ onMounted(async () => {
           <v-list
             lines="two"
             class="mb-4 rounded"
-            style="max-height: 220px; overflow-y: auto; border: 1px solid #e0e0e0"
+            style="
+              max-height: 220px;
+              overflow-y: auto;
+              border: 1px solid #e0e0e0;
+            "
           >
             <v-list-item
               v-for="(problem, i) in copiesColumnProblemsDisplay"
@@ -1208,19 +1278,26 @@ onMounted(async () => {
                 problem.reason === 'date'
                   ? 'mdi-calendar-alert'
                   : problem.reason === 'float'
-                  ? 'mdi-decimal'
-                  : 'mdi-text-search'
+                    ? 'mdi-decimal'
+                    : 'mdi-text-search'
               "
             >
-              <v-list-item-title>Row {{ problem.spreadsheetRow }}: &ldquo;{{ problem.value }}&rdquo;</v-list-item-title>
-              <v-list-item-subtitle>{{ copiesColumnProblemLabel(problem.reason) }}</v-list-item-subtitle>
+              <v-list-item-title
+                >Row {{ problem.spreadsheetRow }}: &ldquo;{{
+                  problem.value
+                }}&rdquo;</v-list-item-title
+              >
+              <v-list-item-subtitle>{{
+                copiesColumnProblemLabel(problem.reason)
+              }}</v-list-item-subtitle>
             </v-list-item>
             <v-list-item
               v-if="copiesColumnProblems.length > MAX_DISPLAYED_PROBLEMS"
               prepend-icon="mdi-dots-horizontal"
             >
               <v-list-item-title class="text-medium-emphasis">
-                … and {{ copiesColumnProblems.length - MAX_DISPLAYED_PROBLEMS }} more
+                … and
+                {{ copiesColumnProblems.length - MAX_DISPLAYED_PROBLEMS }} more
               </v-list-item-title>
             </v-list-item>
           </v-list>
@@ -1231,8 +1308,10 @@ onMounted(async () => {
             class="mb-3"
             icon="mdi-information"
           >
-            <strong>Tip:</strong> You can fix this by opening the spreadsheet, ensuring all cells in this column contain
-            integer numbers and the column is formatted in numeric format (or leaving them empty to skip), saving the file, and reloading it here.
+            <strong>Tip:</strong> You can fix this by opening the spreadsheet,
+            ensuring all cells in this column contain integer numbers and the
+            column is formatted in numeric format (or leaving them empty to
+            skip), saving the file, and reloading it here.
           </v-alert>
           <p class="text-body-2">How should these entries be handled?</p>
         </v-card-text>
