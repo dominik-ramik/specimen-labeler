@@ -1121,7 +1121,7 @@ onMounted(async () => {
           href="https://github.com/dominik-ramik/specimen-labeler"
           ,
           target="_blank"
-          >Specimen Labeller on GitHub</a
+          >Specimen Labeler on GitHub</a
         >
       </div>
     </v-main>

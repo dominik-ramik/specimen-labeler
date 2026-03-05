@@ -276,6 +276,18 @@
               </li>
             </ul>
 
+            <v-alert type="warning" variant="tonal" class="mt-3 mb-1">
+              <div class="font-weight-bold">Don't forget <code>{:next}</code> between every label</div>
+              <p class="mt-2 mb-1" style="font-size: 14px">
+                <code>{:next}</code> is a <strong>label separator</strong>, not a "skip to next record" command.
+                The app uses it to know where one label ends and the next begins.
+              </p>
+              <ul class="mt-1" style="padding-left: 18px; font-size: 14px">
+                <li>If your template has <strong>4 label slots</strong> (e.g. a 2×2 table), you need <strong>3 occurrences</strong> of <code>{:next}</code> — one between each pair of adjacent labels.</li>
+                <li>Without it, the app treats the entire page as a single label and fills all slots with the <strong>same record</strong>.</li>
+              </ul>
+            </v-alert>
+
             <v-divider class="my-4"></v-divider>
 
             <h5 class="subsection-heading">
