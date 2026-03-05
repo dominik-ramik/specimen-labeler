@@ -54,57 +54,21 @@ export class LabelGenerator {
     // Step 1: Defragment placeholders that Word split across multiple <w:t> tags
     let processedXml = this.defragmentPlaceholders(xmlContent)
 
-    // Extract the full text to find all placeholders and count {:next} tags
+    // Step 1b: Remove any {:next} tags whose following slot contains no bindable placeholders
+    // (handles trailing {:next}, consecutive {:next}{:next}, and any other empty slot)
+    const { xmlContent: cleanedXml, removedCount } = this.removeEmptySlots(processedXml, headerSet)
+    processedXml = cleanedXml
+
+    // Count remaining {:next} tags to determine items per page
     const textContent = this.extractTextFromXml(processedXml)
-
-    // Count {:next} tags to determine items per page
     const nextMatches = textContent.match(/\{:next\}/g) || []
-    let itemsPerPage = nextMatches.length + 1
+    const itemsPerPage = Math.max(1, nextMatches.length + 1)
 
-    // FIX: Check if the last {:next} is a trailing one (no bindable placeholders after it)
-    if (nextMatches.length > 0) {
-      const lastNextIndex = textContent.lastIndexOf('{:next}')
-      if (lastNextIndex !== -1) {
-        // Get text after the last {:next}
-        const textAfter = textContent.substring(lastNextIndex + 7) // 7 is length of '{:next}'
-
-        // Check for bindable placeholders in the text after the last {:next}
-        const placeholderPattern = /\{([^}:][^}]*)\}/g
-        let hasValidPlaceholder = false
-        let match
-
-        while ((match = placeholderPattern.exec(textAfter)) !== null) {
-          const tag = match[1].trim()
-
-          // Skip {:next}
-          if (tag === ':next') continue
-
-          // Check if this is a known column header
-          const isKnownColumn = headerSet.has(tag)
-
-          // If not known, check exclusion list (matches replaceAllPlaceholders logic)
-          if (!isKnownColumn) {
-            if (tag.startsWith('#') || tag.startsWith('/') ||
-              tag === 'pages' || tag.startsWith('@') ||
-              tag.startsWith('.') || tag.startsWith(':')) {
-              continue
-            }
-          }
-
-          // If we found a placeholder that isn't a control tag, the slot is valid
-          hasValidPlaceholder = true
-          break
-        }
-
-        // If no valid placeholders follow the last {:next}, ignore it
-        if (!hasValidPlaceholder) {
-          itemsPerPage = Math.max(1, itemsPerPage - 1)
-          console.log(`[PREPROCESS] Ignoring trailing {:next} - no placeholders found after it. Adjusted itemsPerPage to ${itemsPerPage}`)
-        }
-      }
+    if (removedCount > 0) {
+      console.log(`[PREPROCESS] Removed ${removedCount} empty {:next} slot(s). Final items per page: ${itemsPerPage}`)
+    } else {
+      console.log(`[PREPROCESS] Found ${nextMatches.length} {:next} tags. Items per page: ${itemsPerPage}`)
     }
-
-    console.log(`[PREPROCESS] Found ${nextMatches.length} {:next} tags. Final items per page: ${itemsPerPage}`)
 
     // Step 2: Calculate cursor positions based on {:next} tags
     const cursorPositions = this.calculateCursorPositions(processedXml)
@@ -116,6 +80,64 @@ export class LabelGenerator {
     processedXml = processedXml.replace(/\{:next\}/g, '')
 
     return { processedXml, itemsPerPage }
+  }
+
+  /**
+   * Scan all slots created by {:next} separators and remove any {:next} whose
+   * following slot contains no bindable column placeholders. This collapses
+   * consecutive {:next} tags, removes a trailing {:next}, and fixes any other
+   * empty slot that would otherwise silently consume a data record.
+   *
+   * @param {string} xmlContent - Defragmented document XML
+   * @param {Set<string>} headerSet - Known column header names
+   * @returns {{ xmlContent: string, removedCount: number }}
+   */
+  removeEmptySlots(xmlContent, headerSet) {
+    const text = this.extractTextFromXml(xmlContent)
+    const slots = text.split('{:next}')
+
+    // Helper: does a text segment contain at least one bindable placeholder?
+    const hasValidPlaceholder = (segment) => {
+      const pattern = /\{([^}:][^}]*)\}/g
+      let m
+      while ((m = pattern.exec(segment)) !== null) {
+        const tag = m[1].trim()
+        if (tag === ':next') continue
+        if (!headerSet.has(tag)) {
+          if (tag.startsWith('#') || tag.startsWith('/') ||
+            tag === 'pages' || tag.startsWith('@') ||
+            tag.startsWith('.') || tag.startsWith(':')) {
+            continue
+          }
+        }
+        return true
+      }
+      return false
+    }
+
+    // Identify which {:next} occurrences (0-indexed) should be removed.
+    // The {:next} at index i separates slots[i] and slots[i+1].
+    // Remove it when slots[i+1] has no valid placeholder.
+    const toRemove = new Set()
+    for (let i = 0; i < slots.length - 1; i++) {
+      if (!hasValidPlaceholder(slots[i + 1])) {
+        toRemove.add(i)
+        console.log(`[PREPROCESS] Removing {:next} #${i} — no bindable placeholders in following slot`)
+      }
+    }
+
+    if (toRemove.size === 0) {
+      return { xmlContent, removedCount: 0 }
+    }
+
+    // Remove only the targeted occurrences, leaving others intact.
+    let occurrence = 0
+    const modifiedXml = xmlContent.replace(/\{:next\}/g, (match) => {
+      const idx = occurrence++
+      return toRemove.has(idx) ? '' : match
+    })
+
+    return { xmlContent: modifiedXml, removedCount: toRemove.size }
   }
 
   /**
