@@ -92,6 +92,58 @@ const setCopiesInvalidHandling = (choice) => {
   showCopiesColumnDialog.value = false;
 };
 
+// Excessive-copies warning dialog
+const EXCESSIVE_COPIES_THRESHOLD = 30;
+const showExcessiveCopiesDialog = ref(false);
+const excessiveCopiesEntries = ref([]);
+const excessiveCopiesIsFixed = ref(false);
+const MAX_DISPLAYED_EXCESSIVE = 50;
+const excessiveCopiesEntriesDisplay = computed(() =>
+  excessiveCopiesEntries.value.slice(0, MAX_DISPLAYED_EXCESSIVE)
+);
+let resolveExcessiveCopiesPrompt = null;
+
+// Mirrors resolveCopiesValue from labelGenerator.js to resolve copy count for a single row
+const resolveRowCopies = (row, config) => {
+  const { mode, column, addSubtract, fixed, invalidValueHandling } = config.duplicates;
+  const handling = invalidValueHandling || 'skip';
+  const offset = addSubtract || 0;
+  if (mode === 'fixed') return Math.max(0, fixed || 1);
+  if (mode === 'column' && column) {
+    const rawValue = row[column];
+    const meta = row.__metadata?.[column] ?? null;
+    const fallback = handling === 'assume1' ? 1 : 0;
+    if (rawValue === '' || rawValue === null || rawValue === undefined) return 0;
+    if (meta?.isDate) return fallback;
+    const str = rawValue.toString().trim();
+    const num = Number(str);
+    if (!isFinite(num) || isNaN(num) || !Number.isInteger(num)) return fallback;
+    return Math.max(0, num + offset);
+  }
+  return 1;
+};
+
+const promptExcessiveCopies = (entries, isFixed) => {
+  return new Promise((resolve) => {
+    excessiveCopiesEntries.value = entries;
+    excessiveCopiesIsFixed.value = isFixed;
+    showExcessiveCopiesDialog.value = true;
+    resolveExcessiveCopiesPrompt = resolve;
+  });
+};
+
+const confirmExcessiveCopies = () => {
+  showExcessiveCopiesDialog.value = false;
+  resolveExcessiveCopiesPrompt?.(true);
+  resolveExcessiveCopiesPrompt = null;
+};
+
+const cancelExcessiveCopies = () => {
+  showExcessiveCopiesDialog.value = false;
+  resolveExcessiveCopiesPrompt?.(false);
+  resolveExcessiveCopiesPrompt = null;
+};
+
 // Track the last column for which the dialog was shown to avoid re-triggering
 // on unrelated config changes (e.g. only invalidValueHandling changed).
 let lastValidatedCopiesColumn = null;
@@ -353,6 +405,39 @@ const generateLabels = async () => {
 
     if (data.length === 0) {
       throw new Error("No data found in the Excel sheet");
+    }
+
+    // Check for suspiciously high copy counts before proceeding
+    {
+      const selectedData = labelGenerator.applyRecordSelection(data, configuration.value);
+      const mode = configuration.value.duplicates.mode;
+      const isFixed = mode === 'fixed';
+      const excessiveEntries = [];
+
+      if (isFixed) {
+        const fixedCount = configuration.value.duplicates.fixed || 1;
+        if (fixedCount > EXCESSIVE_COPIES_THRESHOLD) {
+          excessiveEntries.push({ copies: fixedCount, rowCount: selectedData.length });
+        }
+      } else {
+        for (let i = 0; i < selectedData.length; i++) {
+          const copies = resolveRowCopies(selectedData[i], configuration.value);
+          if (copies > EXCESSIVE_COPIES_THRESHOLD) {
+            const rowNum = selectedData[i].__spreadsheetRow ?? (i + 2);
+            excessiveEntries.push({ rowNum, copies });
+          }
+        }
+      }
+
+      if (excessiveEntries.length > 0) {
+        hideLoading();
+        const confirmed = await promptExcessiveCopies(excessiveEntries, isFixed);
+        if (!confirmed) {
+          isGenerating.value = false;
+          return;
+        }
+        showLoading("Preparing to generate labels...");
+      }
     }
 
     const result = await labelGenerator.generateLabels(
@@ -1007,6 +1092,93 @@ onMounted(async () => {
       :message="loadingMessage"
       :progress="loadingProgress"
     />
+
+    <!-- Excessive-copies warning dialog -->
+    <v-dialog v-model="showExcessiveCopiesDialog" max-width="560" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center ga-2">
+          <v-icon color="warning">mdi-content-copy</v-icon>
+          Unusually high copy counts detected
+        </v-card-title>
+        <v-card-text>
+          <p class="mb-3">
+            The following
+            <span v-if="excessiveCopiesIsFixed">fixed copies setting exceeds</span>
+            <span v-else>{{ excessiveCopiesEntries.length === 1 ? 'entry has a copy count that exceeds' : 'entries have copy counts that exceed' }}</span>
+            the warning threshold of <strong>{{ EXCESSIVE_COPIES_THRESHOLD }}</strong> copies:
+          </p>
+
+          <!-- Fixed mode: single summary row -->
+          <v-alert
+            v-if="excessiveCopiesIsFixed"
+            type="warning"
+            variant="tonal"
+            density="compact"
+            icon="mdi-numeric-positive-1"
+            class="mb-4"
+          >
+            Fixed copies: <strong>{{ excessiveCopiesEntries[0]?.copies }}</strong>
+            &nbsp;&mdash;&nbsp;
+            {{ excessiveCopiesEntries[0]?.rowCount }} record{{ excessiveCopiesEntries[0]?.rowCount === 1 ? '' : 's' }}
+            will each get <strong>{{ excessiveCopiesEntries[0]?.copies }}</strong> copies
+            (total: <strong>{{ (excessiveCopiesEntries[0]?.copies ?? 0) * (excessiveCopiesEntries[0]?.rowCount ?? 0) }}</strong> labels)
+          </v-alert>
+
+          <!-- Column mode: list of individual rows -->
+          <v-list
+            v-else
+            lines="two"
+            class="mb-4 rounded"
+            style="max-height: 220px; overflow-y: auto; border: 1px solid #e0e0e0"
+          >
+            <v-list-item
+              v-for="(entry, i) in excessiveCopiesEntriesDisplay"
+              :key="i"
+              prepend-icon="mdi-content-copy"
+            >
+              <v-list-item-title>Row {{ entry.rowNum }}: {{ entry.copies }} copies</v-list-item-title>
+            </v-list-item>
+            <v-list-item
+              v-if="excessiveCopiesEntries.length > MAX_DISPLAYED_EXCESSIVE"
+              prepend-icon="mdi-dots-horizontal"
+            >
+              <v-list-item-title class="text-medium-emphasis">
+                &hellip; and {{ excessiveCopiesEntries.length - MAX_DISPLAYED_EXCESSIVE }} more
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+
+          <v-alert
+            type="warning"
+            variant="tonal"
+            density="compact"
+            icon="mdi-alert"
+          >
+            Generating a large number of copies may produce a very large document and take significant time.
+            Please confirm this is intentional before proceeding.
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="d-flex ga-2 pa-4 pt-0">
+          <v-btn
+            variant="tonal"
+            color="error"
+            prepend-icon="mdi-cancel"
+            @click="cancelExcessiveCopies"
+          >
+            Cancel
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            variant="tonal"
+            color="warning"
+            prepend-icon="mdi-check"
+            @click="confirmExcessiveCopies"
+          >
+            Proceed anyway
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
 
     <!-- Copies-column invalid-value dialog -->
     <v-dialog v-model="showCopiesColumnDialog" max-width="560" persistent>

@@ -52,5 +52,3 @@ export const SORT_ORDER = {
 export const SORTING_LIMITS = {
   MAX_SORT_RULES: 5
 }
-
-// No changes needed - the constants file doesn't contain date column configuration
