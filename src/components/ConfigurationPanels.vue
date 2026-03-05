@@ -454,21 +454,54 @@ const dateColumnOptions = computed(() => {
   return props.headers;
 });
 
-// Watch for prop changes
+// Watch for prop changes — apply the same clamping so that persisted values
+// out of range for the current dataset are corrected immediately.
 watch(
   () => props.config,
   (newConfig) => {
-    localConfig.value = JSON.parse(JSON.stringify(newConfig));
+    const clamped = JSON.parse(JSON.stringify(newConfig));
+    const total = props.totalRows;
+    if (total > 0) {
+      if (clamped.recordSelection.endRow != null && clamped.recordSelection.endRow > total) {
+        clamped.recordSelection.endRow = total;
+      }
+      if (clamped.recordSelection.startRow != null && clamped.recordSelection.startRow > total) {
+        clamped.recordSelection.startRow = total;
+      }
+    }
+    localConfig.value = clamped;
   },
   { deep: true },
 );
 
-// Watch for totalRows changes
+// Watch for totalRows changes — only clamp values that exceed the dataset size,
+// never silently expand a persisted selection. Emit so display, storage and
+// processing all stay in sync.
 watch(
   () => props.totalRows,
   (newTotal) => {
-    if (newTotal > 0 && localConfig.value.recordSelection.endRow < newTotal) {
-      localConfig.value.recordSelection.endRow = newTotal;
+    if (newTotal > 0) {
+      let changed = false;
+
+      if (
+        localConfig.value.recordSelection.endRow != null &&
+        localConfig.value.recordSelection.endRow > newTotal
+      ) {
+        localConfig.value.recordSelection.endRow = newTotal;
+        changed = true;
+      }
+
+      if (
+        localConfig.value.recordSelection.startRow != null &&
+        localConfig.value.recordSelection.startRow > newTotal
+      ) {
+        localConfig.value.recordSelection.startRow = newTotal;
+        changed = true;
+      }
+
+      if (changed) {
+        emitUpdate();
+      }
     }
   },
   { immediate: true },
