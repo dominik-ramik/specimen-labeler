@@ -5,6 +5,40 @@ import { saveAs } from 'file-saver'
 import { applyFormatting } from '../utils/formatter'
 import { VALIDATION_LIMITS, PROGRESS_UPDATE } from '../utils/constants'
 
+/**
+ * Safely convert a raw spreadsheet cell value to a non-negative integer
+ * suitable for use as a label copy count.
+ *
+ * Rules applied in order:
+ *  1. Empty / null / undefined  → 0
+ *  2. Date stored as serial num → fallback (user-configured)
+ *  3. Non-numeric text          → fallback (user-configured)
+ *  4. Finite float              → fallback (user-configured)
+ *  5. Valid integer             → the integer itself (may still be negative;
+ *     callers clamp with Math.max(0, …))
+ *
+ * @param {*}      rawValue            Cell value as returned by excelHandler
+ * @param {Object} meta                Cell metadata ({ isDate, format }) or null
+ * @param {'skip'|'assume1'} handling  What to do with invalid/unexpected values
+ * @returns {number}
+ */
+function resolveCopiesValue(rawValue, meta, handling) {
+  const fallback = handling === 'assume1' ? 1 : 0
+
+  if (rawValue === '' || rawValue === null || rawValue === undefined) return 0
+
+  // Date stored as a serial number — would produce a huge copy count
+  if (meta?.isDate) return fallback
+
+  const str = rawValue.toString().trim()
+  const num = Number(str)
+
+  if (!isFinite(num) || isNaN(num)) return fallback   // non-numeric text
+  if (!Number.isInteger(num)) return fallback          // float — would truncate silently
+
+  return num
+}
+
 export class LabelGenerator {
   /**
      * Preprocess the template XML to transform simple placeholders into indexed array syntax.
@@ -857,6 +891,8 @@ export class LabelGenerator {
     const result = []
     const totalRecords = data.length
 
+    const invalidHandling = config.duplicates.invalidValueHandling || 'skip'
+
     if (collate === 'uncollated') {
       for (let i = 0; i < data.length; i++) {
         const row = data[i]
@@ -865,10 +901,8 @@ export class LabelGenerator {
         if (mode === 'column') {
           if (column) {
             const rawValue = row[column]
-            // Handle empty, undefined, or non-numeric values
-            const columnValue = (rawValue === '' || rawValue === undefined || rawValue === null)
-              ? 0
-              : (parseInt(rawValue) || 0)
+            const meta = row.__metadata?.[column] ?? null
+            const columnValue = resolveCopiesValue(rawValue, meta, invalidHandling)
             duplicateCount = columnValue + (addSubtract || 0)
             // Allow 0 copies (skip row), but not negative
             duplicateCount = Math.max(0, duplicateCount)
@@ -913,10 +947,8 @@ export class LabelGenerator {
         if (mode === 'column') {
           if (column) {
             const rawValue = row[column]
-            // Handle empty, undefined, or non-numeric values
-            const columnValue = (rawValue === '' || rawValue === undefined || rawValue === null)
-              ? 0
-              : (parseInt(rawValue) || 0)
+            const meta = row.__metadata?.[column] ?? null
+            const columnValue = resolveCopiesValue(rawValue, meta, invalidHandling)
             duplicateCount = columnValue + (addSubtract || 0)
             // Allow 0 copies (skip row), but not negative
             duplicateCount = Math.max(0, duplicateCount)

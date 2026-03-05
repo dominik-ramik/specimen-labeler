@@ -21,6 +21,7 @@ import {
   loadColumnNames,
   getExcelData,
   saveSheetName,
+  validateCopiesColumn,
 } from "./utils/excelHandler";
 import { labelGenerator } from "./services/labelGenerator";
 import { deleteFileFromIndexedDB, indexedDBDataToFile } from "./utils/indexedDBStorage";
@@ -66,6 +67,47 @@ const {
   hasMessages,
   hasErrors,
 } = useMessages();
+
+// Copies-column validation dialog
+const showCopiesColumnDialog = ref(false);
+const copiesColumnProblems = ref([]);
+const MAX_DISPLAYED_PROBLEMS = 50;
+const copiesColumnProblemsDisplay = computed(() =>
+  copiesColumnProblems.value.slice(0, MAX_DISPLAYED_PROBLEMS)
+);
+const copiesColumnProblemLabel = (reason) => {
+  switch (reason) {
+    case "date":
+      return "Date value — would generate an enormous number of copies";
+    case "non-numeric":
+      return "Non-numeric text";
+    case "float":
+      return "Decimal number — would be truncated to an integer";
+    default:
+      return "Invalid value";
+  }
+};
+const setCopiesInvalidHandling = (choice) => {
+  configuration.value.duplicates.invalidValueHandling = choice;
+  showCopiesColumnDialog.value = false;
+};
+
+// Track the last column for which the dialog was shown to avoid re-triggering
+// on unrelated config changes (e.g. only invalidValueHandling changed).
+let lastValidatedCopiesColumn = null;
+
+// Run copies-column validation against the given data and show the dialog
+// if problematic values are found. Marks the column as validated so the
+// watcher does not open the dialog a second time for the same column.
+const checkAndShowCopiesColumnDialog = (column, data) => {
+  if (!column || !data || data.length === 0) return;
+  lastValidatedCopiesColumn = column;
+  const problems = validateCopiesColumn(data, column);
+  if (problems.length > 0) {
+    copiesColumnProblems.value = problems;
+    showCopiesColumnDialog.value = true;
+  }
+};
 
 // UI State
 const loading = ref(false);
@@ -144,14 +186,24 @@ const hasProcessableRecords = computed(() => {
   if (configuration.value.duplicates.mode === 'column' && configuration.value.duplicates.column) {
     const colName = configuration.value.duplicates.column;
     const offset = configuration.value.duplicates.addSubtract || 0;
+    const handling = configuration.value.duplicates.invalidValueHandling || 'skip';
 
     // Returns true if AT LEAST ONE row has a copy count > 0
     return selectedData.some(row => {
       const rawVal = row[colName];
-      // Treat empty/null as 0
-      const numVal = (rawVal === "" || rawVal === null || rawVal === undefined) 
-        ? 0 
-        : (parseInt(rawVal) || 0);
+      const meta = row.__metadata?.[colName] ?? null;
+      // Reuse the same resolution logic as labelGenerator
+      let numVal = 0;
+      if (rawVal === '' || rawVal === null || rawVal === undefined) {
+        numVal = 0;
+      } else if (meta?.isDate) {
+        numVal = handling === 'assume1' ? 1 : 0;
+      } else {
+        const n = Number(rawVal.toString().trim());
+        numVal = (!isFinite(n) || isNaN(n) || !Number.isInteger(n))
+          ? (handling === 'assume1' ? 1 : 0)
+          : n;
+      }
       return Math.max(0, numVal + offset) > 0;
     });
   }
@@ -231,11 +283,28 @@ const handleSheetSelection = async (sheet) => {
     const excelData = await getExcelData(excelFile.value, sheet);
     setCachedExcelData(excelData);
 
+    // Reset validated-column tracking so the fresh data is always checked,
+    // including on page reload where the column was already persisted in config.
+    lastValidatedCopiesColumn = null;
+
     const duplicateColumn = headerList.find((h) =>
       h.toLowerCase().includes("duplicate"),
     );
     if (duplicateColumn) {
       configuration.value.duplicates.column = duplicateColumn;
+    }
+
+    // Validate the active copies column immediately with the freshly loaded data.
+    // This handles both the reload case (column persisted, no user interaction)
+    // and the auto-detect case above.
+    if (
+      configuration.value.duplicates.mode === "column" &&
+      configuration.value.duplicates.column
+    ) {
+      checkAndShowCopiesColumnDialog(
+        configuration.value.duplicates.column,
+        excelData,
+      );
     }
 
     hideLoading();
@@ -428,6 +497,7 @@ watch(
 
     const column = configuration.value.duplicates.column;
     const addSubtract = configuration.value.duplicates.addSubtract || 0;
+    const handling = configuration.value.duplicates.invalidValueHandling || 'skip';
 
     const skippedRows = [];
     const selectedData = labelGenerator.applyRecordSelection(
@@ -437,10 +507,18 @@ watch(
 
     selectedData.forEach((row) => {
       const rawValue = row[column];
-      const columnValue =
-        rawValue === "" || rawValue === undefined || rawValue === null
-          ? 0
-          : parseInt(rawValue) || 0;
+      const meta = row.__metadata?.[column] ?? null;
+      let columnValue = 0;
+      if (rawValue === '' || rawValue === null || rawValue === undefined) {
+        columnValue = 0;
+      } else if (meta?.isDate) {
+        columnValue = handling === 'assume1' ? 1 : 0;
+      } else {
+        const n = Number(rawValue.toString().trim());
+        columnValue = (!isFinite(n) || isNaN(n) || !Number.isInteger(n))
+          ? (handling === 'assume1' ? 1 : 0)
+          : n;
+      }
       const copies = Math.max(0, columnValue + addSubtract);
 
       if (copies === 0) {
@@ -662,6 +740,28 @@ watch(
     }
   },
   { deep: true },
+);
+
+// Watch for copies-column selection and validate values for suitability.
+// This handles the case where the user manually changes the column after
+// data is already loaded. The reload / initial-load case is handled directly
+// in handleSheetSelection once data is available.
+watch(
+  () => [configuration.value.duplicates.mode, configuration.value.duplicates.column],
+  ([mode, column]) => {
+    if (mode !== "column" || !column) {
+      lastValidatedCopiesColumn = null;
+      return;
+    }
+    // Skip if this column was already validated (e.g. just set by handleSheetSelection)
+    if (column === lastValidatedCopiesColumn) return;
+
+    const data = getCachedExcelData();
+    // If data isn't loaded yet the handleSheetSelection call will cover validation
+    if (!data || data.length === 0) return;
+
+    checkAndShowCopiesColumnDialog(column, data);
+  }
 );
 
 // Initialize on mount
@@ -907,6 +1007,83 @@ onMounted(async () => {
       :message="loadingMessage"
       :progress="loadingProgress"
     />
+
+    <!-- Copies-column invalid-value dialog -->
+    <v-dialog v-model="showCopiesColumnDialog" max-width="560" persistent>
+      <v-card>
+        <v-card-title class="d-flex align-center ga-2">
+          <v-icon color="warning">mdi-alert</v-icon>
+          Non-numeric values in copies column
+        </v-card-title>
+        <v-card-text>
+          <p class="mb-3">
+            The selected column
+            <strong>"{{ configuration.duplicates?.column }}"</strong>
+            contains {{ copiesColumnProblems.length }} value{{
+              copiesColumnProblems.length === 1 ? "" : "s"
+            }}
+            that cannot be used as a label copy count:
+          </p>
+          <v-list
+            lines="two"
+            class="mb-4 rounded"
+            style="max-height: 220px; overflow-y: auto; border: 1px solid #e0e0e0"
+          >
+            <v-list-item
+              v-for="(problem, i) in copiesColumnProblemsDisplay"
+              :key="i"
+              :prepend-icon="
+                problem.reason === 'date'
+                  ? 'mdi-calendar-alert'
+                  : problem.reason === 'float'
+                  ? 'mdi-decimal'
+                  : 'mdi-text-search'
+              "
+            >
+              <v-list-item-title>Row {{ problem.spreadsheetRow }}: &ldquo;{{ problem.value }}&rdquo;</v-list-item-title>
+              <v-list-item-subtitle>{{ copiesColumnProblemLabel(problem.reason) }}</v-list-item-subtitle>
+            </v-list-item>
+            <v-list-item
+              v-if="copiesColumnProblems.length > MAX_DISPLAYED_PROBLEMS"
+              prepend-icon="mdi-dots-horizontal"
+            >
+              <v-list-item-title class="text-medium-emphasis">
+                … and {{ copiesColumnProblems.length - MAX_DISPLAYED_PROBLEMS }} more
+              </v-list-item-title>
+            </v-list-item>
+          </v-list>
+          <v-alert
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-3"
+            icon="mdi-information"
+          >
+            <strong>Tip:</strong> You can fix this by opening the spreadsheet, ensuring all cells in this column contain
+            integer numbers and the column is formatted in numeric format (or leaving them empty to skip), saving the file, and reloading it here.
+          </v-alert>
+          <p class="text-body-2">How should these entries be handled?</p>
+        </v-card-text>
+        <v-card-actions class="flex-wrap ga-2 pa-4 pt-0">
+          <v-btn
+            variant="tonal"
+            color="warning"
+            prepend-icon="mdi-skip-next"
+            @click="setCopiesInvalidHandling('skip')"
+          >
+            Skip them (0 copies)
+          </v-btn>
+          <v-btn
+            variant="tonal"
+            color="primary"
+            prepend-icon="mdi-numeric-1-box-outline"
+            @click="setCopiesInvalidHandling('assume1')"
+          >
+            Assume 1 copy
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </v-app>
 </template>
 

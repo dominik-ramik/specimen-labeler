@@ -2,6 +2,55 @@ import * as XLSX from 'xlsx'
 
 let dataCache = {}
 
+/**
+ * Validate the values in a column intended for label copy counts.
+ * Returns an array of problem descriptors for rows that contain
+ * values that cannot safely be used as integer copy counts.
+ *
+ * Problems detected:
+ *  - 'date'        : value is a date stored as a number in the spreadsheet
+ *  - 'non-numeric' : value cannot be parsed as a number at all
+ *  - 'float'       : value is a finite number but not a whole integer
+ *
+ * Empty / blank values are intentionally not flagged — they map to 0 naturally.
+ *
+ * @param {Object[]} data        Rows returned by getExcelData()
+ * @param {string}   columnName  Header name of the column to inspect
+ * @returns {{ spreadsheetRow: number|string, value: string, reason: string }[]}
+ */
+export function validateCopiesColumn(data, columnName) {
+  const problems = []
+
+  for (const row of data) {
+    const rawValue = row[columnName]
+    const meta = row.__metadata?.[columnName]
+    const spreadsheetRow = row.__spreadsheetRow ?? '?'
+
+    // Blank / missing cells naturally become 0 — not a problem to report
+    if (rawValue === '' || rawValue === null || rawValue === undefined) continue
+
+    // ⚠️ Date stored as a serial number: parseInt would return a huge value (e.g. 45000+)
+    if (meta?.isDate) {
+      problems.push({ spreadsheetRow, value: rawValue, reason: 'date' })
+      continue
+    }
+
+    const str = rawValue.toString().trim()
+    const num = Number(str)
+
+    if (!isFinite(num) || isNaN(num)) {
+      // Text that doesn't parse as any number
+      problems.push({ spreadsheetRow, value: rawValue, reason: 'non-numeric' })
+    } else if (!Number.isInteger(num)) {
+      // A valid number but not a whole integer (e.g. 2.5)
+      problems.push({ spreadsheetRow, value: rawValue, reason: 'float' })
+    }
+    // Negative integers are handled by Math.max(0, …) downstream — not flagged here
+  }
+
+  return problems
+}
+
 function clearCache() {
   dataCache = {}
 }
@@ -158,14 +207,19 @@ export async function getExcelData(file, sheetName) {
     const worksheet = workbook.Sheets[sheetName]
     const range = XLSX.utils.decode_range(worksheet['!ref'])
 
-    // Get headers from the first row
+    // Get headers from the first row.
+    // headerColumns stores the 0-based physical column index for each header
+    // so that data values and metadata are looked up at the right offset even
+    // when there are empty/blank columns in the middle of the sheet.
     const headers = []
+    const headerColumns = []
     for (let col = range.s.c; col <= range.e.c; col++) {
       const cellAddress = XLSX.utils.encode_cell({ r: 0, c: col })
       const cell = worksheet[cellAddress]
       const headerValue = cell ? XLSX.utils.format_cell(cell).trim() : ''
       if (headerValue && headerValue !== '') {
         headers.push(headerValue)
+        headerColumns.push(col - range.s.c) // physical 0-based index into rowData/rowMetadata
       }
     }
 
@@ -233,8 +287,9 @@ export async function getExcelData(file, sheetName) {
         
         headers.forEach((header, index) => {
           if (header && header.toString().trim() !== '') {
-            rowData[header] = rowObj.values[index] || ''
-            rowMeta[header] = rowObj.metadata[index] || { isDate: false, format: null }
+            const colIdx = headerColumns[index] // use physical column index, not position in headers array
+            rowData[header] = rowObj.values[colIdx] || ''
+            rowMeta[header] = rowObj.metadata[colIdx] || { isDate: false, format: null }
           }
         })
         

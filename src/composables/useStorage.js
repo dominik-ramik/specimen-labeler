@@ -23,7 +23,8 @@ const defaultConfig = {
     column: '',
     addSubtract: 0,
     fixed: 1,
-    collate: 'uncollated'
+    collate: 'uncollated',
+    invalidValueHandling: 'skip' // 'skip' = treat as 0, 'assume1' = treat as 1
   },
   sorting: {
     enabled: false,
