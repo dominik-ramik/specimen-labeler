@@ -657,39 +657,38 @@
         </v-expansion-panel-text>
       </v-expansion-panel>
 
-      <v-expansion-panel value="about" readonly="true" v-model="alwaysExpand">
-        <v-expansion-panel-title class="panel-title">
-          <v-icon start color="primary">mdi-information</v-icon>
-          About
-        </v-expansion-panel-title>
-        <v-expansion-panel-text>
-          <div class="content-section">
-            <p class="section-text text-body-1">
-              <strong>Author:</strong> Dominik M. Ramík<br />
-              <strong>Website:</strong>
-              <a
-                href="https://dominicweb.eu"
-                target="_blank"
-                class="text-primary text-decoration-none"
-              >
-                https://dominicweb.eu
-              </a>
-            </p>
-            <p class="section-text text-body-1 mt-2">
-              This tool was originally developed for the research program
-              <strong>Plants and People of Vanuatu</strong>:
-              <a
-                href="https://pvnh.net/plants-and-people-of-vanuatu/"
-                target="_blank"
-                class="text-primary text-decoration-none"
-              >
-                https://pvnh.net/plants-and-people-of-vanuatu/
-              </a>
-            </p>
-          </div>
-        </v-expansion-panel-text>
-      </v-expansion-panel>
     </v-expansion-panels>
+
+    <v-sheet class="mt-2 pa-4" rounded border>
+      <div class="d-flex align-center mb-3">
+        <v-icon start color="primary" class="mr-2">mdi-information</v-icon>
+        <span class="panel-title">About</span>
+      </div>
+      <div class="content-section">
+        <p class="section-text text-body-1">
+          <strong>Author:</strong> Dominik M. Ramík<br />
+          <strong>Website:</strong>
+          <a
+            href="https://dominicweb.eu"
+            target="_blank"
+            class="text-primary text-decoration-none"
+          >
+            https://dominicweb.eu
+          </a>
+        </p>
+        <p class="section-text text-body-1 mt-2">
+          This tool was originally developed for the research program
+          <strong>Plants and People of Vanuatu</strong>:
+          <a
+            href="https://pvnh.net/plants-and-people-of-vanuatu/"
+            target="_blank"
+            class="text-primary text-decoration-none"
+          >
+            https://pvnh.net/plants-and-people-of-vanuatu/
+          </a>
+        </p>
+      </div>
+    </v-sheet>
   </div>
 </template>
 
@@ -699,7 +698,7 @@ import { ref } from "vue";
 import showcaseTemplateUrl from "@/assets/showcase_template.docx";
 import showcaseDataUrl from "@/assets/showcase_data.xlsx";
 
-const openPanels = ref(["howto", "about"]);
+const openPanels = ref(["howto"]);
 
 // Method to programmatically control panels
 const showTemplateGuide = () => {
