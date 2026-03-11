@@ -929,7 +929,7 @@ onMounted(async () => {
     <!-- App Bar -->
     <v-app-bar class="main-gradient" density="comfortable" elevation="2">
       <v-app-bar-title class="font-weight-bold">
-        🌿 Specimens Labeler
+        <v-icon color="white" class="mr-1">mdi-tag-text</v-icon> Specimens Labeler
       </v-app-bar-title>
 
       <v-spacer></v-spacer>
