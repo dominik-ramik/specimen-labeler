@@ -146,6 +146,22 @@
                   ></v-radio>
                 </v-radio-group>
               </div>
+              <v-alert
+                type="info"
+                variant="tonal"
+                density="compact"
+                class="mt-6 text-body-2"
+                icon="mdi-information-outline"
+              >
+                Working with multi-sheet specimens?
+                <a
+                  href="#"
+                  @click.prevent="openMultiSheetHelp"
+                  class="text-decoration-underline font-weight-bold text-info"
+                >
+                  See the suggested workflow
+                </a>
+              </v-alert>
             </v-expansion-panel-text>
           </v-expansion-panel>
         </v-expansion-panels>
@@ -365,9 +381,13 @@ const props = defineProps({
   },
 });
 
-const emit = defineEmits(["update:config"]);
+const emit = defineEmits(["update:config", "show-multi-sheet-help"]);
 
 const localConfig = ref(JSON.parse(JSON.stringify(props.config)));
+
+const openMultiSheetHelp = () => {
+  emit("show-multi-sheet-help");
+};
 
 // Separate panels for left and right columns
 const leftPanels = ref(["records", "copies"]);
@@ -462,10 +482,16 @@ watch(
     const clamped = JSON.parse(JSON.stringify(newConfig));
     const total = props.totalRows;
     if (total > 0) {
-      if (clamped.recordSelection.endRow != null && clamped.recordSelection.endRow > total) {
+      if (
+        clamped.recordSelection.endRow != null &&
+        clamped.recordSelection.endRow > total
+      ) {
         clamped.recordSelection.endRow = total;
       }
-      if (clamped.recordSelection.startRow != null && clamped.recordSelection.startRow > total) {
+      if (
+        clamped.recordSelection.startRow != null &&
+        clamped.recordSelection.startRow > total
+      ) {
         clamped.recordSelection.startRow = total;
       }
     }

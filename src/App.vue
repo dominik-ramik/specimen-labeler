@@ -752,6 +752,11 @@ const showTemplateHelp = () => {
   helpDrawerRef.value?.openWithTemplateGuide();
 };
 
+// Open help drawer at multi-sheet guide
+const showMultiSheetHelp = () => {
+  helpDrawerRef.value?.openWithMultiSheetGuide();
+};
+
 // Extract template columns when template is loaded
 const currentTemplateColumns = computed(() => {
   const templateArrayBuffer = getStoredTemplateArrayBuffer();
@@ -1039,6 +1044,7 @@ onMounted(async () => {
                 :total-rows="totalDataRows"
                 :template-columns="currentTemplateColumns"
                 @update:config="handleConfigUpdate"
+                @show-multi-sheet-help="showMultiSheetHelp"
               />
             </template>
 

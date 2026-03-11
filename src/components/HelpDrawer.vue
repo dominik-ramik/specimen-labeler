@@ -63,9 +63,18 @@ const openWithTemplateGuide = () => {
   }, 100)
 }
 
+// Method to open drawer and scroll to multi-sheet guide
+const openWithMultiSheetGuide = () => {
+  drawerOpen.value = true
+  setTimeout(() => {
+    contentRef.value?.showMultiSheetGuide()
+  }, 100)
+}
+
 // Expose method to parent
 defineExpose({
-  openWithTemplateGuide
+  openWithTemplateGuide,
+  openWithMultiSheetGuide,
 })
 </script>
 

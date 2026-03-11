@@ -11,7 +11,7 @@
           <!-- Introduction -->
           <div class="content-section">
             <h4 class="section-heading">What is this app?</h4>
-            <p class="section-text">
+            <p class="section-text text-body-1">
               The <strong>Specimen Labeler</strong> is a tool designed to
               automatically generate formatted specimen labels from your Excel
               spreadsheet or CSV data using a Word document template.
@@ -95,7 +95,7 @@
         </v-expansion-panel-title>
         <v-expansion-panel-text>
           <div class="content-section">
-            <p class="section-text mb-4">
+            <p class="section-text text-body-1 mb-4">
               Ready to test the app? We've prepared a set of showcase files for
               you to experiment with.
               <strong>Download them to your computer</strong>, then upload them
@@ -203,7 +203,7 @@
         <v-expansion-panel-text>
           <div class="content-section">
             <h5 class="subsection-heading">1. The Source Data</h5>
-            <p class="section-text mb-2">
+            <p class="section-text text-body-1 mb-2">
               To understand how templates work, let's look at this simplified
               dataset. Notice the <strong>"Copies"</strong> column — we can use
               this to tell the app how many labels to print for each row.
@@ -265,7 +265,7 @@
             </v-table>
 
             <h5 class="subsection-heading">2. Basic Syntax</h5>
-            <ul class="option-list">
+            <ul class="option-list text-body-1">
               <li>
                 <strong>Placeholders:</strong> Use column headers inside curly
                 braces, e.g., <code>{Species}</code>.
@@ -277,14 +277,25 @@
             </ul>
 
             <v-alert type="warning" variant="tonal" class="mt-3 mb-1">
-              <div class="font-weight-bold">Don't forget <code>{:next}</code> between every label</div>
+              <div class="font-weight-bold">
+                Don't forget <code>{:next}</code> between every label
+              </div>
               <p class="mt-2 mb-1" style="font-size: 14px">
-                <code>{:next}</code> is a <strong>label separator</strong>, not a "skip to next record" command.
-                The app uses it to know where one label ends and the next begins.
+                <code>{:next}</code> is a <strong>label separator</strong>, not
+                a "skip to next record" command. The app uses it to know where
+                one label ends and the next begins.
               </p>
               <ul class="mt-1" style="padding-left: 18px; font-size: 14px">
-                <li>If your template has <strong>4 label slots</strong> (e.g. a 2×2 table), you need <strong>3 occurrences</strong> of <code>{:next}</code> — one between each pair of adjacent labels.</li>
-                <li>Without it, the app treats the entire page as a single label and fills all slots with the <strong>same record</strong>.</li>
+                <li>
+                  If your template has <strong>4 label slots</strong> (e.g. a
+                  2×2 table), you need <strong>3 occurrences</strong> of
+                  <code>{:next}</code> — one between each pair of adjacent
+                  labels.
+                </li>
+                <li>
+                  Without it, the app treats the entire page as a single label
+                  and fills all slots with the <strong>same record</strong>.
+                </li>
               </ul>
             </v-alert>
 
@@ -293,7 +304,7 @@
             <h5 class="subsection-heading">
               3. Standard Example: Multiple Labels per Page
             </h5>
-            <p class="section-text">
+            <p class="section-text text-body-1">
               This example demonstrates a <strong>2x2 table</strong> (4 labels
               per page, each in one cell of the table).
             </p>
@@ -439,11 +450,11 @@
             <v-divider class="my-4"></v-divider>
 
             <h5 class="subsection-heading">4. Advanced example</h5>
-            <p class="section-text">
+            <p class="section-text text-body-1">
               You may need to print two different labels of different formats
               for the <strong>same specimen</strong> side-by-side.
             </p>
-            <p class="section-text mt-2">For example, you might need:</p>
+            <p class="section-text text-body-1 mt-2">For example, you might need:</p>
             <ul class="ml-4 mt-1 mb-2">
               <li>
                 <strong>Label A (Left):</strong> A tiny label to fit inside a
@@ -455,7 +466,7 @@
               </li>
             </ul>
 
-            <p class="section-text">
+            <p class="section-text text-body-1">
               <strong>How to do it:</strong> Place placeholders for the same
               record in both table cells. Only use the <code>{:next}</code> tag
               when you are ready to move to the <em>next</em> label set.
@@ -575,6 +586,44 @@
                 </li>
               </ul>
             </v-alert>
+
+            <v-divider class="my-6"></v-divider>
+
+            <h5
+              id="multi-sheet-guide"
+              class="subsection-heading transition-swing"
+            >
+              5. Multi-Sheet Specimens
+            </h5>
+
+            <p class="section-text text-body-1 mb-4">
+              Because the application generates physical pages rather than
+              interpreting biological records, it requires the total number of
+              physical sheets to print the correct number of labels. If a single
+              duplicate spans multiple herbarium sheets, the copies setting must
+              reflect the physical sheet count.
+            </p>
+
+            <v-alert type="info" variant="tonal" class="mb-4">
+              <div class="font-weight-bold mb-2">How to format your data:</div>
+              <ul class="option-list">
+                <li>
+                  <strong>For Label Copies (Total Sheets):</strong> Create a
+                  column in your spreadsheet representing the absolute total
+                  number of sheets required (e.g.,
+                  <em>Duplicates × Sheets per duplicate</em>). Select this
+                  column in the <strong>Label Copies</strong> panel.
+                </li>
+                <li>
+                  <strong>For Label Text (Duplicate Info):</strong> Keep your
+                  scientific duplicate count in a separate column (e.g.,
+                  <code>Duplicate_Count</code>). Do not use this column for the
+                  "Label Copies" setting; instead, insert it as a standard
+                  placeholder <code>{Duplicate_Count}</code> in your Word
+                  template.
+                </li>
+              </ul>
+            </v-alert>
           </div>
         </v-expansion-panel-text>
       </v-expansion-panel>
@@ -593,7 +642,7 @@
               <v-chip color="success" variant="flat">.csv</v-chip>
               <v-chip color="success" variant="flat">.tsv</v-chip>
             </v-chip-group>
-            <p class="section-text mt-2">
+            <p class="section-text text-body-1 mt-2">
               Compatible with Google Sheets, Office 365, LibreOffice, OpenOffice
             </p>
 
@@ -601,7 +650,7 @@
             <v-chip-group>
               <v-chip color="primary" variant="flat">.docx</v-chip>
             </v-chip-group>
-            <p class="section-text mt-2">
+            <p class="section-text text-body-1 mt-2">
               Microsoft Word 2007+ format (not .doc)
             </p>
           </div>
@@ -615,7 +664,7 @@
         </v-expansion-panel-title>
         <v-expansion-panel-text>
           <div class="content-section">
-            <p class="section-text">
+            <p class="section-text text-body-1">
               <strong>Author:</strong> Dominik M. Ramík<br />
               <strong>Website:</strong>
               <a
@@ -626,7 +675,7 @@
                 https://dominicweb.eu
               </a>
             </p>
-            <p class="section-text mt-2">
+            <p class="section-text text-body-1 mt-2">
               This tool was originally developed for the research program
               <strong>Plants and People of Vanuatu</strong>:
               <a
@@ -658,9 +707,24 @@ const showTemplateGuide = () => {
   openPanels.value = ["template"];
 };
 
+// Open template panel and scroll to multi-sheet section
+const showMultiSheetGuide = () => {
+  openPanels.value = ["template"];
+  // Wait for panel to expand before scrolling
+  setTimeout(() => {
+    const el = document.getElementById("multi-sheet-guide");
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("text-primary");
+      setTimeout(() => el.classList.remove("text-primary"), 2000);
+    }
+  }, 350);
+};
+
 // Expose method to parent
 defineExpose({
   showTemplateGuide,
+  showMultiSheetGuide,
 });
 </script>
 

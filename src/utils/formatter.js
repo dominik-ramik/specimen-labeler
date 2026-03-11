@@ -13,9 +13,9 @@ function getMonthName(monthIndex, locale, style = 'long') {
   // monthIndex: 0-11 (JavaScript Date month)
   // locale: BCP 47 locale code (e.g., 'en-US', 'fr-FR', 'cs-CZ')
   // style: 'long' (January), 'short' (Jan), 'narrow' (J)
-  
+
   const date = new Date(2000, monthIndex, 1) // Use year 2000 as arbitrary reference
-  
+
   try {
     const formatter = new Intl.DateTimeFormat(locale, { month: style })
     return formatter.format(date)
@@ -35,6 +35,16 @@ function resolveLocale(localeConfig) {
 
 function formatDate(dateString, format, locale = 'en-US', cellMetadata = null) {
   if (!dateString || dateString.toString().trim() === '') return dateString
+
+  // Helper function to create dates strictly without JavaScript silently wrapping 
+  // out-of-bounds days or months into future years.
+  const createStrictDate = (y, m, d) => {
+    const tempDate = new Date(y, m, d);
+    if (tempDate.getFullYear() === y && tempDate.getMonth() === m && tempDate.getDate() === d) {
+      return tempDate;
+    }
+    return new Date(NaN); // Force an invalid date if wrapping occurred
+  };
 
   try {
     let date
@@ -63,44 +73,45 @@ function formatDate(dateString, format, locale = 'en-US', cellMetadata = null) {
       } else {
         date = new Date(dateString)
       }
-    } 
+    }
     // Handle ambiguous date formats (DD/MM/YYYY vs MM/DD/YYYY)
     else if (dateString.toString().match(/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/)) {
       const str = dateString.toString()
       const parts = str.split(/[\/\-\.]/)
-      const year = parts[2].length === 2 ? 2000 + parseInt(parts[2]) : parseInt(parts[2])
-      
+      const yearPart = parseInt(parts[2])
+      const year = parts[2].length === 2 ? 2000 + yearPart : yearPart
+
+      let primaryMonth, primaryDay, fallbackMonth, fallbackDay;
+
       // Use locale to determine if it's day-first or month-first
       if (isDayFirstLocale()) {
         // DD/MM/YYYY format (Europe, most of world)
-        const day = parseInt(parts[0])
-        const month = parseInt(parts[1]) - 1
-        date = new Date(year, month, day)
+        primaryDay = parseInt(parts[0])
+        primaryMonth = parseInt(parts[1]) - 1
+
+        fallbackDay = parseInt(parts[1])
+        fallbackMonth = parseInt(parts[0]) - 1
       } else {
         // MM/DD/YYYY format (US)
-        const month = parseInt(parts[0]) - 1
-        const day = parseInt(parts[1])
-        date = new Date(year, month, day)
+        primaryMonth = parseInt(parts[0]) - 1
+        primaryDay = parseInt(parts[1])
+
+        fallbackMonth = parseInt(parts[1]) - 1
+        fallbackDay = parseInt(parts[0])
       }
-      
-      // Validate the parsed date
+
+      // Attempt parsing with strict bounds
+      date = createStrictDate(year, primaryMonth, primaryDay)
+
+      // If failed, try the opposite format fallback with strict bounds
       if (isNaN(date.getTime())) {
-        // If failed, try the opposite format
-        if (isDayFirstLocale()) {
-          const month = parseInt(parts[0]) - 1
-          const day = parseInt(parts[1])
-          date = new Date(year, month, day)
-        } else {
-          const day = parseInt(parts[0])
-          const month = parseInt(parts[1]) - 1
-          date = new Date(year, month, day)
-        }
+        date = createStrictDate(year, fallbackMonth, fallbackDay)
       }
     }
     // Handle ISO format and other standard formats
     else if (dateString.toString().includes('/') || dateString.toString().includes('-') || dateString.toString().includes('.')) {
       date = new Date(dateString)
-    } 
+    }
     // Try parsing as-is
     else {
       date = new Date(dateString)
@@ -108,7 +119,7 @@ function formatDate(dateString, format, locale = 'en-US', cellMetadata = null) {
 
     // Validate the date
     if (isNaN(date.getTime())) {
-      console.warn('Invalid date:', dateString, `(user locale: ${getUserLocale()})`)
+      console.error('Invalid date:', dateString, `(user locale: ${getUserLocale()})`)
       return dateString
     }
 
@@ -163,64 +174,6 @@ function formatDecimal(value, format) {
   }
 }
 
-function isLikelyDate(value, metadata = null) {
-  if (!value || value.toString().trim() === '') return false
-
-  // If we have Excel metadata, use it first (most reliable)
-  if (metadata && metadata.isDate) {
-    return true
-  }
-
-  // If Excel metadata explicitly says NOT a date (has format info but not
-  // date format), don't treat plain numbers as date serials.
-  const metaSaysNotDate = metadata
-    && !metadata.isDate
-    && metadata.format != null
-
-  const str = value.toString().trim()
-
-  // Skip if it's just a small number (likely not a date)
-  if (/^\d+$/.test(str)) {
-    const num = parseInt(str)
-    if (num < 1000) {
-      return false
-    }
-    // When metadata explicitly says this is NOT a date, respect it
-    if (metaSaysNotDate) {
-      return false
-    }
-    // If it's a reasonable Excel serial number, treat as date
-    if (num >= 1 && num < 100000) {
-      return true
-    }
-  }
-
-  const datePatterns = [
-    /^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/,        // DD/MM/YYYY or MM/DD/YYYY
-    /^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/,          // YYYY-MM-DD
-    /^\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i,  // DD Jan, DD January
-    /^(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)\s+\d{1,2}/i,  // Jan DD, January DD
-    /^\d{5}$/,                                         // Excel serial (5 digits)
-    /^(january|february|march|april|may|june|july|august|september|october|november|december)\s+\d{1,2},?\s+\d{4}/i  // Month DD, YYYY
-  ]
-
-  // Check if it matches any date pattern
-  if (datePatterns.some((pattern) => pattern.test(str))) {
-    return true
-  }
-
-  // Try parsing as date - if it works and produces a valid year, it's likely a date
-  const parsed = Date.parse(str)
-  if (!isNaN(parsed)) {
-    const date = new Date(parsed)
-    const year = date.getFullYear()
-    // Reasonable year range for specimen dates
-    return year >= 1800 && year <= 2100
-  }
-
-  return false
-}
-
 function isLikelyDecimal(value) {
   if (!value || value.toString().trim() === '') return false
 
@@ -231,7 +184,7 @@ function isLikelyDecimal(value) {
   if (/^\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4}$/.test(str)) {
     return false // This looks like a date (DD/MM/YYYY, MM/DD/YYYY, etc.)
   }
-  
+
   if (/^\d{4}[\/\-\.]\d{1,2}[\/\-\.]\d{1,2}$/.test(str)) {
     return false // This looks like an ISO date (YYYY-MM-DD)
   }
@@ -244,42 +197,41 @@ function isLikelyDecimal(value) {
 // Parse DMS (Degrees Minutes Seconds) format
 function parseDMS(dmsString) {
   if (!dmsString || typeof dmsString !== 'string') return null
-  
+
   // Match patterns like: 12°34'56"N, 12°34'56.7"N, 12° 34' 56" N
   const dmsPattern = /(-?\d+)[°\s]+(\d+)['\s]+(\d+(?:\.\d+)?)["\s]*([NSEW])?/i
   const match = dmsString.match(dmsPattern)
-  
+
   if (!match) return null
-  
+
   const degrees = parseInt(match[1])
   const minutes = parseInt(match[2])
   const seconds = parseFloat(match[3])
   const direction = match[4]?.toUpperCase()
-  
-  let decimal = degrees + minutes / 60 + seconds / 3600
-  
-  // Apply direction
-  if (direction === 'S' || direction === 'W') {
+
+  let decimal = Math.abs(degrees) + minutes / 60 + seconds / 3600
+
+  if (degrees < 0 || direction === 'S' || direction === 'W') {
     decimal = -decimal
   }
-  
+
   return decimal
 }
 
 // Parse decimal degrees format
 function parseDecimal(value) {
   if (value === null || value === undefined || value === '') return null
-  
+
   const str = value.toString().trim()
-  
+
   // 🆕 Handle European decimal comma format (e.g., "-19,5689")
   // Replace comma with dot for parsing
   const normalizedStr = str.replace(',', '.')
-  
+
   // Handle formats like: "12.345N", "12.345 N", "-12.345"
   const decimalPattern = /^(-?\d+(?:[.,]\d+)?)\s*([NSEW])?$/i
   const match = normalizedStr.match(decimalPattern)
-  
+
   if (!match) {
     // Only accept if the entire remaining string is a plain number.
     // parseFloat silently truncates at the first non-numeric character
@@ -289,29 +241,29 @@ function parseDecimal(value) {
     }
     return null
   }
-  
+
   let decimal = parseFloat(match[1])
   const direction = match[2]?.toUpperCase()
-  
+
   if (direction === 'S' || direction === 'W') {
     decimal = -Math.abs(decimal)
   }
-  
+
   return decimal
 }
 
 // Parse coordinate from various formats
 function parseCoordinate(value) {
   if (!value) return null
-  
+
   const str = value.toString().trim()
-  
+
   // Try DMS format first
   if (str.includes('°') || str.includes("'") || str.includes('"')) {
     const dms = parseDMS(str)
     if (dms !== null) return dms
   }
-  
+
   // Try decimal format
   return parseDecimal(str)
 }
@@ -319,45 +271,54 @@ function parseCoordinate(value) {
 // Encode coordinate to DMS format with direction
 function encodeAsDMS(decimal, isLatitude = true, decimalFormat = 'dot') {
   if (decimal === null || decimal === undefined || decimal === '') return ''
-  
+
   const absDecimal = Math.abs(decimal)
   const degrees = Math.floor(absDecimal)
   const minutesFloat = (absDecimal - degrees) * 60
   const minutes = Math.floor(minutesFloat)
   const seconds = ((minutesFloat - minutes) * 60).toFixed(1)
-  
+
+  if (seconds === '60.0') {
+    seconds = '0.0'
+    minutes += 1
+    if (minutes === 60) {
+      minutes = 0
+      degrees += 1
+    }
+  }
+
   // Apply decimal format to seconds
   const formattedSeconds = decimalFormat === 'comma' ? seconds.replace('.', ',') : seconds
-  
-  const direction = isLatitude 
-    ? (decimal >= 0 ? 'N' : 'S') 
+
+  const direction = isLatitude
+    ? (decimal >= 0 ? 'N' : 'S')
     : (decimal >= 0 ? 'E' : 'W')
-  
+
   return `${degrees}°${minutes}'${formattedSeconds}"${direction}`
 }
 
 // Encode coordinate to decimal format with direction
 function encodeAsDecimalWithDirection(decimal, isLatitude = true, decimalFormat = 'dot') {
   if (decimal === null || decimal === undefined || decimal === '') return ''
-  
+
   const absValue = Math.abs(decimal).toFixed(6)
-  
+
   // Apply decimal format
   const formattedValue = decimalFormat === 'comma' ? absValue.replace('.', ',') : absValue
-  
-  const direction = isLatitude 
-    ? (decimal >= 0 ? 'N' : 'S') 
+
+  const direction = isLatitude
+    ? (decimal >= 0 ? 'N' : 'S')
     : (decimal >= 0 ? 'E' : 'W')
-  
+
   return `${formattedValue}${direction}`
 }
 
 // Encode coordinate to signed decimal format
 function encodeAsSignedDecimal(decimal, decimalFormat = 'dot') {
   if (decimal === null || decimal === undefined || decimal === '') return ''
-  
+
   const value = decimal.toFixed(6)
-  
+
   // Apply decimal format
   return decimalFormat === 'comma' ? value.replace('.', ',') : value
 }
@@ -365,7 +326,7 @@ function encodeAsSignedDecimal(decimal, decimalFormat = 'dot') {
 // Encode coordinate based on output format
 function encodeCoordinate(decimal, format, isLatitude = true, decimalFormat = 'dot') {
   if (decimal === null || decimal === undefined || decimal === '') return ''
-  
+
   switch (format) {
     case 'dms':
       return encodeAsDMS(decimal, isLatitude, decimalFormat)
@@ -375,35 +336,6 @@ function encodeCoordinate(decimal, format, isLatitude = true, decimalFormat = 'd
       return encodeAsSignedDecimal(decimal, decimalFormat)
     default:
       return decimal.toString()
-  }
-}
-
-function convertDecimalToDMS(decimal) {
-  if (decimal === null || decimal === undefined || decimal === '') return decimal
-
-  const absDecimal = Math.abs(decimal)
-  const degrees = Math.floor(absDecimal)
-  const minutesFloat = (absDecimal - degrees) * 60
-  const minutes = Math.floor(minutesFloat)
-  const seconds = ((minutesFloat - minutes) * 60).toFixed(1)
-
-  return `${degrees}°${minutes}'${seconds}"`
-}
-
-function formatGeocoordinate(value, isLatitude = true) {
-  if (!value || value.toString().trim() === '') return value
-
-  try {
-    const decimal = parseFloat(value)
-    if (isNaN(decimal)) return value
-
-    const dms = convertDecimalToDMS(decimal)
-    const direction = isLatitude ? (decimal >= 0 ? 'N' : 'S') : (decimal >= 0 ? 'E' : 'W')
-
-    return `${dms}${direction}`
-  } catch (error) {
-    console.warn('Geocoordinate formatting error:', error)
-    return value
   }
 }
 
@@ -426,7 +358,7 @@ function isLikelyGeocoordinate(value) {
 
   // Check for lat/lon pair separated by space, comma, or tab
   // 🆕 Updated to handle both comma separators and tab/space
-  const parts = str.split(/[\s\t]+/).filter(p => p.trim() !== '')
+  const parts = str.split(/\s*,\s*|\t+| {2,}/).filter(p => p.trim() !== '')
   if (parts.length === 2) {
     const lat = parseFloat(parts[0].replace(',', '.'))
     const lon = parseFloat(parts[1].replace(',', '.'))
@@ -448,7 +380,7 @@ export function applyFormatting(data, config) {
 
     Object.keys(row).forEach((key) => {
       if (key === '__metadata') return
-      
+
       let value = row[key]
 
       const skipColumns = ['sort #', 'CollNb', 'Initials']
@@ -481,13 +413,13 @@ export function applyFormatting(data, config) {
           // Single column with both lat and lon
           if (key === geocoord.singleColumn && isLikelyGeocoordinate(value)) {
             const str = value.toString().trim()
-            const parts = str.split(/[\s,]+/)
-            
+            const parts = str.split(/\s*,\s*|\t+| {2,}/).filter(p => p.trim() !== '')
+
             if (parts.length === 2) {
               // Parse both coordinates
               const lat = parseCoordinate(parts[0])
               const lon = parseCoordinate(parts[1])
-              
+
               if (lat !== null && lon !== null) {
                 // Encode based on output format WITH decimal format applied
                 const latFormatted = encodeCoordinate(lat, geocoord.outputFormat, true, decimalFormat)
@@ -524,7 +456,7 @@ export function applyFormatting(data, config) {
       writable: false,
       configurable: true
     })
-    
+
     // Preserve __spreadsheetRow if present
     if (row.__spreadsheetRow !== undefined) {
       Object.defineProperty(formattedRow, '__spreadsheetRow', {
