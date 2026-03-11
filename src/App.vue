@@ -752,6 +752,11 @@ const showTemplateHelp = () => {
   helpDrawerRef.value?.openWithTemplateGuide();
 };
 
+// Open help drawer at multi-sheet guide
+const showMultiSheetHelp = () => {
+  helpDrawerRef.value?.openWithMultiSheetGuide();
+};
+
 // Extract template columns when template is loaded
 const currentTemplateColumns = computed(() => {
   const templateArrayBuffer = getStoredTemplateArrayBuffer();
@@ -924,7 +929,7 @@ onMounted(async () => {
     <!-- App Bar -->
     <v-app-bar class="main-gradient" density="comfortable" elevation="2">
       <v-app-bar-title class="font-weight-bold">
-        🌿 Specimens Labeler
+        <v-icon color="white" class="mr-1">mdi-tag-text</v-icon> Specimens Labeler
       </v-app-bar-title>
 
       <v-spacer></v-spacer>
@@ -1039,6 +1044,7 @@ onMounted(async () => {
                 :total-rows="totalDataRows"
                 :template-columns="currentTemplateColumns"
                 @update:config="handleConfigUpdate"
+                @show-multi-sheet-help="showMultiSheetHelp"
               />
             </template>
 
