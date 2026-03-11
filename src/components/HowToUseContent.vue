@@ -454,7 +454,9 @@
               You may need to print two different labels of different formats
               for the <strong>same specimen</strong> side-by-side.
             </p>
-            <p class="section-text text-body-1 mt-2">For example, you might need:</p>
+            <p class="section-text text-body-1 mt-2">
+              For example, you might need:
+            </p>
             <ul class="ml-4 mt-1 mb-2">
               <li>
                 <strong>Label A (Left):</strong> A tiny label to fit inside a
@@ -596,31 +598,30 @@
               5. Multi-Sheet Specimens
             </h5>
 
-            <p class="section-text text-body-1 mb-4">
-              Because the application generates physical pages rather than
-              interpreting biological records, it requires the total number of
-              physical sheets to print the correct number of labels. If a single
-              duplicate spans multiple herbarium sheets, the copies setting must
-              reflect the physical sheet count.
+            <p class="section-text text-body-1 mb-4">              
+              Sometimes a single specimen is too large to fit on one herbarium sheet, and a single
+              "duplicate" is split across multiple sheets. Because every
+              physical sheet requires its own label, you need to adjust how you
+              tell the app to generate copies.
             </p>
 
             <v-alert type="info" variant="tonal" class="mb-4">
               <div class="font-weight-bold mb-2">How to format your data:</div>
               <ul class="option-list">
                 <li>
-                  <strong>For Label Copies (Total Sheets):</strong> Create a
+                  <strong>For Label Copies (Total number of sheets):</strong> Create a
                   column in your spreadsheet representing the absolute total
-                  number of sheets required (e.g.,
+                  number of sheets associated with that specimen (e.g.,
                   <em>Duplicates × Sheets per duplicate</em>). Select this
-                  column in the <strong>Label Copies</strong> panel.
+                  column in the <strong>Label Copies</strong> panel. For specimens which have only one sheet per duplicate, this number will be the same as your duplicates count.
                 </li>
                 <li>
                   <strong>For Label Text (Duplicate Info):</strong> Keep your
-                  scientific duplicate count in a separate column (e.g.,
+                  specimen duplicate count in a separate column (e.g.,
                   <code>Duplicate_Count</code>). Do not use this column for the
                   "Label Copies" setting; instead, insert it as a standard
                   placeholder <code>{Duplicate_Count}</code> in your Word
-                  template.
+                  template if you wish to include the duplicates count in the generated labels.
                 </li>
               </ul>
             </v-alert>
@@ -656,7 +657,6 @@
           </div>
         </v-expansion-panel-text>
       </v-expansion-panel>
-
     </v-expansion-panels>
 
     <v-sheet class="mt-2 pa-4" rounded border>
