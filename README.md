@@ -1,5 +1,8 @@
 # 🌿 Specimen Labeler
 
+> [!TIP]
+> Open [specimen-labeler.netlify.app/](https://specimen-labeler.netlify.app/) to use the app
+
 The **Specimen Labeler** is a web-based tool designed to automatically generate formatted specimen labels from your Excel spreadsheet or CSV data using a Word document template.
 
 This application works entirely in your browser (no data is sent to a server) and unlike standard mail merge tools, offers specialized features for scientific and collection management needs.
